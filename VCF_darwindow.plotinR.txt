@@ -1,0 +1,2601 @@
+# DARWINDOW
+# This R script contains functions to plot the output of sliding window analyses executed at Unix command line by VCF_windowhe_multisamples.sh script.
+# All results will be stored in a list object called 'dwd' (for darwindow).
+# Sample information is stored in dataframe 'ind'.
+# Window information is stored in dataframe 'loc'.
+
+# source("D:/PhD/General/Rawdata2snps/VCF_darwindow.plotinR.txt")
+
+# Before running, install and load the R package 'zoo' and in addition (less crucial, needed for stripcharts only) 'graphics':  
+# install.packages(c("zoo","graphics"))
+# library(c("zoo","graphics"))
+
+
+examplerun<-function()
+	{
+	# LOAD DATA:
+	source("VCF_darwindow.plotinR.txt")
+	library(c("zoo","graphics"))
+	myworkdir	<- "path/to/workdir"
+	mysuffix	<- "100000.multisamples.txt"		# name of input file, excluding 'windowhe' or 'windowpi' etc.
+	mypopfile	<- "popfile.txt"					# tab separated, 4 mandatory columns: name,	pop, popcol, nr
+													# nr is crucial. It indicates the order in the vcf file. Do not assume that by default the order in the vcf file is alphabetical. Do check!!  
+	setwd(myworkdir)
+	getwindowdata(suffix=mysuffix,samplefile=mypopfile,annotated=FALSE,indlevel=TRUE,poplevel=FALSE,mydir=myworkdir)
+	# overview of data:
+	summary(dwd)
+	#
+	# CALCULATE HETEROZYGOSITY:
+	window_size	<- 25000		# window size in bp
+	nr_windows	<- 2			# minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 4, and window size is 25000, then reported ROHs are minimum 100Kb)
+	calcwindowhe(maxmiss=0.9)
+	calcregionhe(maxmiss=0.9,nwindows=nr_windows)
+	meanhe()
+	#
+	# PLOT HETEROZYGOSITY:
+	popboxplot(export="pdf",indscore="regionhe")
+	indhisto(export="pdf",plotname="He_histo_region",inputdf=dwd$regionhedf,missdf=NULL,windowsize=window_size,nwindows=nr_windows)
+	runindhisto(exporttype="pdf",plot_name="He_histo_window_25000",window_size=window_size,n_windows=nr_windows,x_max=1.25,silent=FALSE,missrange=seq(0.3,0.9,0.1))
+	indbarplot(export="pdf")
+	indboxplot(export="pdf",inputdf=dwd$hedf,plotname="Genomewide_windowHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.9)
+	indboxplot(export="pdf",inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500)
+	#
+	# ROH ANALYSES:
+	# detect ROHs of at least 40Kb (assuming that window size is 20K, nr_windows is 2, and min_rle length is 1): 
+	findroh(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=window_size,nwindows=nr_windows)
+	# detect ROHs of at least 0.5Mb (assuming window size is 100K, nwindows is 5, and min_rle_length is 1):
+	findroh(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=100000,nwindows=5)
+	getrohlengths(windowsize=window_size,nrwindows=nr_windows)
+	getrohbin()
+	# Heterozygosity without ROH:
+	correcthe()
+	popboxplot2(export="pdf")
+	#
+	# PLOT ROHs:
+	# stacked barplots:
+	rohbarplot(inputdf=dwd$frohbindf,ylabel="F-roh",plotname="ROHf_barplot",export="pdf",yline=3,mywidth=0.2,legendcex=1.75,addlegend=TRUE,mycolours=NULL)
+	rohbarplot(inputdf=dwd$lrohbindf,ylabel="Total ROH-length",plotname="ROHl_barplot",export="pdf",yline=4.5,mywidth=0.25,legendcex=1.75,addlegend=TRUE,mycolours=NULL)
+	rohbarplot(inputdf=dwd$nrohbindf,ylabel="# ROHs",plotname="ROHn_barplot",export="pdf",yline=4.5,mywidth=0.25,legendcex=1.75,addlegend=TRUE,mycolours=NULL)
+	# plots showing He across genome, depending on settings of findroh function:
+	runindscaffold(do_export=TRUE,input_df1=dwd$hedf,input_df2=NULL,plot_label="He",add_roh=FALSE,add_he=TRUE,add_dxy=FALSE,max_miss=0.9,n_windows=nr_windows,min_rle_len=1,window_size=window_size)
+	runindscaffold(do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=0.9,n_windows=nr_windows,min_rle_len=1,window_size=window_size)
+	popboxplot(export="pdf",ymax=NULL,indscore="froh",plotname="Genomewide_froh_20000",ylabel="F_roh")
+	indscatter(export="pdf",plotname="Lroh_vs_Nroh",xscore="nroh",yscore="lroh",xlabel="Number of ROHs",ylabel="Total ROH length (Mb)",legendpos="topleft",yline=5.5)
+	indscatter(export="pdf",plotname="Froh_vs_He",xscore="regionhe",yscore="froh",xlabel="Genome wide He",ylabel="F (ROH-content)",legendpos="topright",yline=5.75)
+	indscatter(export="pdf",plotname="Froh_vs_Nroh",xscore="nroh",yscore="froh",xlabel="Number of ROHs",ylabel="F (ROH-content)",legendpos="topright",yline=5.75,labels=FALSE)
+	# with labels:
+	indscatter(export="pdf",plotname="Lroh_vs_Nroh",xscore="nroh",yscore="lroh",xlabel="Number of ROHs",ylabel="Total ROH length (Mb)",legendpos="topleft",yline=5.5,labels=TRUE)
+	indscatter(export="pdf",plotname="Froh_vs_He",xscore="regionhe",yscore="froh",xlabel="Genome wide He",ylabel="F (ROH-content)",legendpos="topright",yline=5.75,labels=TRUE)
+	indscatter(export="pdf",plotname="Froh_vs_Nroh",xscore="nroh",yscore="froh",xlabel="Number of ROHs",ylabel="F (ROH-content)",legendpos="topright",yline=5.75,labels=TRUE)
+	indlistboxplot(export="pdf")
+	# plot heterozygosity per scaffold: 	
+	chrombarplot(inputdf1=dwd$chromhedf,inputdf2=dwd$frohdf,plotlabel="Chrom_barplot",export=TRUE,silent=TRUE,win_size=window_size)
+	}
+
+
+
+
+
+##############################################################################
+# Do not change anything from here onwards, unless you know what you are doing
+
+
+
+getwindowdata<-function(suffix="100000.allsites_multi.txt",vcfsamples="myinfo.samples.txt",samplefile="myvcfsampleinfo.txt",bedfile=NULL,annotated=FALSE,indlevel=TRUE,poplevel=FALSE,mydir=NULL,silent=TRUE)
+	{
+	# "C:/Users/Menno_de_Jong/Documents/SNPdatasets/bear_genome"
+	if(is.null(mydir))
+		{
+		mydir	<- getwd()
+		}
+	# SAMPLE FILE:
+	# samplefile is tab separated file with three columns: name, pop, popcol
+	# As of 23-04-2021, it is no longer crucial that order corresponds with order in input data.
+	# Also, not all samples specified in the samplefile need to be present in the vcf (as long as vice versa is true).
+	# Can be generated with the command:
+	# temp1<-inds[,c("name","pop","popcol")]
+	# write.table(temp1,file="myvcfsampleinfo.txt",col.names=TRUE,row.names=FALSE,quote=FALSE,sep="\t")
+	#
+	# VCFSAMPLES:
+	# simply a txt file which lists all samples in the input vcf file, one sample by line, in the order corresponding with the order in the vcf file
+	# Is automatically generated by VCF_windowhe_multisamples script.
+	# However, if missing, can be generated with the command:
+	# /opt/software/bcftools/bcftools-1.9/bin/bcftools query --list-samples mysnps.vcf > myinfo.samples.txt
+	#
+	setwd(mydir)
+	cat("Reading file with sample information...",sep="\n")
+	ind					<- read.table(samplefile,header=TRUE)
+	if(any(!c("name","pop","popcol")%in%colnames(ind)))
+		{
+		return(cat("ERROR: samplefile needs to contain the columns 'name', 'pop', 'popcol'. As of 23-04-2021, the 'nr' column is no longer required.",sep="\n"))
+		}
+	# to make sure that name is not a factor:
+	namevec					<- as.character(ind$name)
+	ind$name				<- NULL
+	ind$name				<- namevec
+	#
+	if(file.exists(vcfsamples))
+		{
+		vcfind					<<- read.table(vcfsamples,header=FALSE)
+		colnames(vcfind)		<<- "name2"
+		vcfind$vcforder			<<- 1:nrow(vcfind)
+		vcfind$name				<<- as.character(vcfind$name2)
+		vcfind$name2			<<- NULL
+		vcfind					<<- vcfind[order(vcfind$name),]
+		if(is.factor(vcfind$name))
+			{
+			return(cat("ERROR: Factor.",sep="\n"))
+			}
+		}else{
+		return(cat("ERROR: As of 23-04-2021, user needs to provide the file 'myinfo.samples.txt' (or other name specified to the vcfsamples flag) generated with the 'bcftools query --list-samples' command.",sep="\n"))
+		}
+	if(nrow(vcfind)>nrow(ind))
+		{
+		return(cat("ERROR: More samples present in vcf file (based on file 'myinfo.samples.txt') then present in samplefile.",sep="\n"))
+		}
+	if(nrow(vcfind)<nrow(ind))
+		{
+		cat("WARNING: Less samples present in vcf file (based on file 'myinfo.samples.txt') then present in samplefile.",sep="\n")
+		}
+	vcfind$bool					<<- vcfind$name%in%ind$name
+	if(any(!vcfind$bool))
+		{
+		return(cat("ERROR: One or more samples in vcf file not present in samplefile. Observed the dataframe 'vcfind' (column 'bool') to find out which sample(s) is/are missing.",sep="\n"))
+		}
+	#
+	ind					<- merge(vcfind,ind,by="name")
+	ind					<- droplevels(ind)					
+	ind$name			<- as.character(ind$name)
+	ind					<- ind[order(ind$vcforder),]
+	ind$filter			<- TRUE
+	ind$poporder		<- ind$pop
+	#
+	popinfo						<- data.frame("pop"=as.character(unique(ind$pop)),"popcol"=NA)
+	for(k in c(1:nrow(popinfo)))
+		{
+		mypop					<- as.character(popinfo$pop[k])
+		if(!silent){cat(mypop,sep="\n")}
+		myindnr					<- which(as.character(ind$pop)==mypop)[1]
+		if(!silent){cat(myindnr,sep="\n")}
+		mycol					<- as.character(ind$popcol[myindnr])
+		if(!silent){cat(mycol,sep="\n")}
+		popinfo$popcol[k]		<- mycol
+		}
+	popinfo						<- popinfo[order(popinfo$pop),]
+	popinfo$nr					<- c(1:nrow(popinfo))
+	popinfo$poporder			<- popinfo$pop
+	popinfo$popordernr			<- popinfo$nr
+	popinfo$nind				<- as.vector(table(ind$pop))
+	popinfo$filter				<- TRUE
+	ninds						<- nrow(ind)
+	npops						<- nrow(popinfo)
+	#
+	cat("Reading data...",sep="\n")
+	infile						<- paste("mywindowhe",suffix,sep=".")
+	if(!file.exists(infile))
+		{
+		cat(paste("ERROR: Windowhe file ('",infile,"') not present in directory:",sep=""),sep="\n")
+		return(cat(getwd(),sep="\n"))
+		}else{
+		cat("Reading windowinfo scores...",sep="\n")
+		windf						<- read.table(infile,header=TRUE) 
+		if(any(!c("contig","startbp","endbp")%in%colnames(windf)))
+			{
+			return(cat("ERROR: windowhe file needs to contain the columns 'contig', 'startbp' and 'endbp'.",sep="\n"))
+			}
+		if("totalbp"%in%colnames(windf))
+			{
+			cat("Column header 'totalbp' present in input file. Assuming that sample data starts at column 5.",sep="\n")
+			loc				<- windf[,c("contig","startbp","endbp","totalbp")]
+			loc$miss		<- round(1-loc$totalbp/(loc$endbp-loc$startbp+1),6)
+			loc$nmiss		<- loc$endbp[1]-loc$totalbp
+			colnr			<- 4
+			}else{
+			cat("Column header 'totalbp' not present in input file. Assuming that sample data starts at column 4.",sep="\n")
+			loc				<- windf[,c("contig","startbp","endbp")]
+			colnr			<- 3
+			}
+		if(!silent){cat("Loaded window info scores.",sep="\n")}
+		loc$nr				<- c(1:nrow(loc))
+		loc$mid				<- ((loc$endbp+loc$startbp-1)/2)/1000000
+		loc$name			<- paste(loc$contig,loc$mid,sep=":")
+		loc$filter			<- TRUE
+		nwindows			<- nrow(loc)
+		if(annotated)
+			{
+			loc$ncoding		<- windf$ncoding
+			loc$propcoding	<- round(loc$ncoding/loc$totalbp,4)
+			}
+		#
+		dwd				<<- list()
+		dwd$popinfo		<<- popinfo
+		dwd$ind			<<- ind
+		dwd$loc			<<- loc
+		}
+	#
+	infile2				<- paste("mywindowld",suffix,sep=".")
+	if(file.exists(infile2))
+		{
+		cat("Adding LD scores...",sep="\n")
+		lddf			<- read.table(infile2,header=TRUE)
+		loc$npoly		<- lddf$nrsnps
+		loc$prop_S		<- lddf$nrsnps/lddf$totalbp
+		loc$nrpairs_meta<- lddf$nrpairs_all 
+		loc$dist_meta	<- lddf$dist_all
+		loc$LD_meta		<- lddf$LD_all
+		loc$LD_meta2	<- lddf$LD_all*500/lddf$dist_all		# correction assuming linear relation ship at first part of the slope		
+		dwd$loc			<<- loc
+		}
+	infile3						<- paste("mywindowadmix",suffix,sep=".")
+	if(file.exists(infile3))
+		{
+		cat("Adding admixture scores...",sep="\n")
+		admixdf					<- read.table(infile3,header=FALSE)
+		colnames(admixdf)		<- c("source1","source2","target","f_3","std.err","Z","nsnps","contig","startbp","endbp")
+		admixdf					<- admixdf[!is.na(admixdf$target),]
+		admixdf$poptrio			<- paste(admixdf$source1,admixdf$source2,admixdf$target,sep="_")
+		admixdf$mid				<- ((admixdf$endbp+admixdf$startbp-1)/2)/1000000
+		admixdf$name			<- paste(admixdf$contig,admixdf$mid,sep=":")
+		#
+		#admixwindf				<- data.frame("name"=unique(admixdf$name))
+		#admixwindf$nr			<- c(1:nrow(admixwindf))
+		admixwindf				<- loc[,c("name","nr")]				
+		#
+		f3list					<- split(admixdf[,c(4,13)],admixdf$poptrio)
+		for(k in c(1:length(f3list)))
+			{
+			tempdf				<- merge(f3list[[k]],admixwindf,by="name",all=TRUE)
+			temp2df				<- tempdf[order(tempdf$nr),]
+			f3list[[k]]			<- temp2df$f_3
+			}
+		f3df					<- as.data.frame(do.call(cbind,f3list))
+		rownames(f3df)			<- admixwindf$name
+		#
+		sdlist					<- split(admixdf[,c(5,13)],admixdf$poptrio)
+		for(k in c(1:length(sdlist)))
+			{
+			tempdf				<- merge(sdlist[[k]],admixwindf,by="name",all=TRUE)
+			temp2df				<- tempdf[order(tempdf$nr),]
+			sdlist[[k]]			<- temp2df$std.err
+			}
+		sddf					<- as.data.frame(do.call(cbind,sdlist))
+		rownames(sddf)			<- admixwindf$name
+		#
+		zlist					<- split(admixdf[,c(6,13)],admixdf$poptrio)
+		for(k in c(1:length(zlist)))
+			{
+			tempdf				<- merge(zlist[[k]],admixwindf,by="name",all=TRUE)
+			temp2df				<- tempdf[order(tempdf$nr),]
+			zlist[[k]]			<- temp2df$Z
+			}
+		zdf						<- as.data.frame(do.call(cbind,zlist))
+		rownames(zdf)			<- admixwindf$name
+		#
+		nsnpslist				<- split(admixdf[,c(7,13)],admixdf$poptrio)
+		for(k in c(1:length(nsnpslist)))
+			{
+			tempdf				<- merge(nsnpslist[[k]],admixwindf,by="name",all=TRUE)
+			temp2df				<- tempdf[order(tempdf$nr),]
+			nsnpslist[[k]]		<- temp2df$nsnps
+			}
+		nsnpsdf					<- as.data.frame(do.call(cbind,nsnpslist))
+		rownames(nsnpsdf)		<- admixwindf$name
+		#
+		dwd$f3df		<<- f3df
+		dwd$f3sddf		<<- sddf
+		dwd$f3zdf		<<- zdf
+		dwd$f3nsnpsdf	<<- nsnpsdf
+		}
+	if(!indlevel)
+		{
+		cat("Not processing sample scores because the flag indlevel is set to FALSE.",sep="\n")
+		}else{
+		windf			<<- windf
+		cat("Processing sample scores...",sep="\n")
+		cat("Number of columns in input window heterozygosity dataframe:",sep="\n")
+		cat(ncol(windf),sep="\n")
+		if("totalbp"%in%colnames(windf))
+			{
+			cat("Assuming data starts at fifth column.",sep="\n")
+			nmissdf					<- windf[,seq(colnr+1,ncol(windf)-3,4),drop=FALSE]
+			rownames(nmissdf)		<- loc$name
+			colnames(nmissdf)		<- ind$name	
+			nmissdf2				<- nmissdf-loc$nmiss
+			rownames(nmissdf2)		<- loc$name
+			colnames(nmissdf2)		<- ind$name
+			}
+		nsitesdf				<- windf[,seq(colnr+2,ncol(windf)-2,4),drop=FALSE]
+		nheterodf				<- windf[,seq(colnr+3,ncol(windf)-1,4),drop=FALSE]
+		nalthomodf				<- windf[,seq(colnr+4,ncol(windf)-0,4),drop=FALSE]
+		rownames(nsitesdf)		<- loc$name
+		rownames(nheterodf)		<- loc$name
+		rownames(nalthomodf)	<- loc$name
+		colnames(nsitesdf)		<- ind$name
+		colnames(nheterodf)		<- ind$name
+		colnames(nalthomodf)	<- ind$name
+		#
+		if("totalbp"%in%colnames(windf))
+			{
+			if(any(ind$name!=colnames(nmissdf)))
+				{
+				return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nmissdf.",sep="\n"))
+				}
+			if(any(ind$name!=colnames(nmissdf2)))
+				{
+				return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nmissdf2.",sep="\n"))
+				}
+			}
+		if(any(ind$name!=colnames(nsitesdf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nsitesdf.",sep="\n"))
+			}
+		if(any(ind$name!=colnames(nheterodf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nheterodf.",sep="\n"))
+			}
+		if(any(ind$name!=colnames(nalthomodf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nalthomodf.",sep="\n"))
+			}
+		#
+		cat("Reordering data based on populations...",sep="\n")
+		if("totalbp"%in%colnames(windf))
+			{
+			nmissdf				<- nmissdf[,order(ind$pop),drop=FALSE]
+			nmissdf2			<- nmissdf2[,order(ind$pop),drop=FALSE]
+			}
+		nsitesdf			<- nsitesdf[,order(ind$pop),drop=FALSE]
+		nheterodf			<- nheterodf[,order(ind$pop),drop=FALSE]
+		nalthomodf			<- nalthomodf[,order(ind$pop),drop=FALSE]
+		ind					<- ind[order(ind$pop),]
+		ind$neworder		<- c(1:nrow(ind))
+		#
+		if("totalbp"%in%colnames(windf))
+			{
+			if(any(ind$name!=colnames(nmissdf)))
+				{
+				return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nmissdf.",sep="\n"))
+				}
+			if(any(ind$name!=colnames(nmissdf2)))
+				{
+				return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nmissdf2.",sep="\n"))
+				}
+			}
+		if(any(ind$name!=colnames(nsitesdf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nsitesdf.",sep="\n"))
+			}
+		if(any(ind$name!=colnames(nheterodf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nheterodf.",sep="\n"))
+			}
+		if(any(ind$name!=colnames(nalthomodf)))
+			{
+			return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nalthomodf.",sep="\n"))
+			}
+		#
+		dwd$ind			<<- ind
+		if("totalbp"%in%colnames(windf))
+			{
+			dwd$nmissdf		<<- nmissdf
+			dwd$nmissdf2	<<- nmissdf2
+			}
+		dwd$nsitesdf	<<- nsitesdf
+		dwd$nheterodf	<<- nheterodf
+		dwd$nalthomodf	<<- nalthomodf
+		#
+		#dwd$nmiss2df	<<- dwd$loc$endbp[1]-dwd$loc$totalbp
+		}		
+	if(poplevel)
+		{
+		cat("Processing population scores...",sep="\n")
+		infile2				<- paste("mywindowpi",suffix,sep=".")
+		popdf				<- read.table(infile2,header=TRUE)
+		wininfo				<- popdf[,c(1:5)]
+		colnames(wininfo)	<- c("contig","start","end","nsites","npoly")
+		loc$npoly			<- wininfo$npoly
+		loc$propS			<- wininfo$npoly/wininfo$nsites
+		#
+		pidf				<- popdf[,c(6:(6+npops-1))] 
+		colnames(pidf)		<- popinfo$pop
+		rownames(pidf)		<- loc$name
+		pidf				<- (1-pidf)*loc$propS*100
+		#
+		dwd$loc				<<- loc
+		dwd$pidf			<<- pidf
+		#
+		if(npops>1)
+			{
+			if(npops>2)
+				{
+				combitable		<- combn(as.character(popinfo$pop),m=2)
+				combitable2		<- combn(popinfo$nr,m=2)
+				ncombi			<- ncol(combitable)
+				popdxydf		<- popdf[,c((6+npops):ncol(popdf)),drop=FALSE]
+				}else{
+				combitable		<- matrix(NA,nrow=2,ncol=1)
+				combitable[1,1]	<- as.character(popinfo$pop[1])
+				combitable[2,1]	<- as.character(popinfo$pop[2])
+				combitable2		<- matrix(NA,nrow=2,ncol=1)
+				combitable2[1,1]<- 1
+				combitable2[2,1]<- 2
+				ncombi			<- 1
+				combinames		<- paste(combitable[1,],combitable[2,],sep="_")
+				popdxydf		<- data.frame("poppair"=as.vector(popdf[,c((6+npops):ncol(popdf))]))
+				}
+			combinames			<- paste(combitable[1,],combitable[2,],sep="_")
+			colnames(combitable)<- combinames
+			rownames(combitable)<- c("pop1","pop2") 
+			#
+			colnames(popdxydf)	<- combinames
+			rownames(popdxydf)	<- loc$name
+			ndiffdf				<- round((1-popdxydf)*loc$propS*loc$totalbp)
+			popdxydf			<- (1-popdxydf)*loc$propS*100
+			#
+			mycols				<- as.character(popinfo$popcol)
+			combicoltable		<- combn(mycols,m=2)
+			combicolvector		<- vector()
+			for(i in c(1:ncol(combicoltable)))
+				{
+				mycol1				<- combicoltable[1,i]
+				mycol2				<- combicoltable[2,i]
+				mycolfunc3 			<- colorRampPalette(c(mycol1,mycol2))
+				combicolvector[i]	<- mycolfunc3(3)[2]
+				}
+			combicoltable			<- rbind(combicoltable,combicolvector)
+			rownames(combicoltable)	<- c("pop1","pop2","poppair")
+			colnames(combicoltable)	<- combinames
+			#
+			# calculate fst:
+			meanpidf			<- as.data.frame(matrix(NA,nrow=nwindows,ncol=ncombi))
+			colnames(meanpidf)	<- combinames
+			rownames(meanpidf)	<- loc$name
+			fstdf				<- as.data.frame(matrix(NA,nrow=nwindows,ncol=ncombi))
+			colnames(fstdf)		<- combinames
+			rownames(fstdf)		<- loc$name
+			# Z-transform (Shows how different window is from mean. Be aware: not an elegant method, because fst values are not normal distributed):
+			zfstdf				<- as.data.frame(matrix(NA,nrow=nwindows,ncol=ncombi))
+			colnames(zfstdf)	<- combinames
+			rownames(zfstdf)	<- loc$name
+			for (k in c(1:ncombi))
+				{
+				pop1		<- combitable2[1,k]
+				pop2		<- combitable2[2,k]
+				pi1			<- pidf[,pop1]
+				pi2			<- pidf[,pop2]
+				meanpi		<- (pi1+pi2)/2
+				dxy			<- popdxydf[,k]
+				meanpidf[,k]<- meanpi
+				myfst		<- round((dxy-meanpi)/dxy,4)
+				fstdf[,k]	<- myfst
+				# Z-transform (Shows how different window is from mean. Be aware: not an elegant method, because fst values are not normal distributed):
+				zfstdf[,k]	<- abs((myfst-mean(myfst,na.rm=TRUE))/sd(myfst,na.rm=TRUE))
+				}
+			dwd$combitable	<<- combitable
+			dwd$combitable2	<<- combitable2
+			dwd$combicoltable<<- combicoltable 	
+			dwd$meanpidf	<<- meanpidf
+			dwd$popdxydf	<<- popdxydf
+			dwd$ndiffdf		<<- ndiffdf
+			dwd$fstdf		<<- fstdf
+			dwd$zfstdf		<<- zfstdf
+			#
+			# Fst formula is (dxy-meanpi)/dxy. Hence: Dxy = pi/(1-Fst)
+			# Fst=0.5: 	Dxy = 2x pi
+			# Fst=0.33: Dxy = 1.5x pi
+			# Fst=0.25: Dxy = 1.25x pi
+			# Fst=0: 	Dxy = pi 
+			#
+			}else{
+			cat("Only 1 population defined. Skipping calculations for population pairs (i.e. Dxy and Fst).",sep="\n") 
+			}
+		}
+	if(!is.null(bedfile))
+		{	
+		genedf				<- read.table(bedfile)
+		colnames(genedf)	<- c("contigtemp","pos1","pos2")
+		genedf$contig		<- as.character(genedf$contigtemp)
+		genedf$startpos		<- ifelse(genedf$pos1<genedf$pos2,genedf$pos1/1000000,genedf$pos2/1000000)
+		genedf$endpos		<- ifelse(genedf$pos1<genedf$pos2,genedf$pos2/1000000,genedf$pos1/1000000)
+		dwd$genedf<<- genedf[,c("contig","startpos","endpos")]
+		}
+	#
+	dwd$poporder		<<- as.character(dwd$popinfo$pop)
+	dwd$poporder2		<<- as.character(dwd$popinfo$pop)
+	dwd$colourorder		<<- as.character(dwd$popinfo$popcol)
+	dwd$colourorder2	<<- as.character(dwd$popinfo$popcol)
+	cat("Data has been stored in list object named 'dwd'.",sep="\n")
+	}
+
+exclude_pop<-function(do_exclude=NULL)
+	{
+	cat("Resetting filters...",sep="\n")
+	dwd$popinfo$filter	<<- TRUE
+	dwd$ind$filter		<<- TRUE
+	if(is.null(do_exclude))
+		{
+		return(cat("WARNING: no population name provided to the do_exclude flag. Not excluding any population.",sep="\n"))
+		}else{
+		# pop df:
+		mypopvec		<- as.character(dwd$popinfo$pop)
+		dwd$popinfo$filter[mypopvec%in%do_exclude]	<<- FALSE
+		# ind df:
+		mypopvec		<- as.character(dwd$ind$pop)
+		dwd$ind$filter[mypopvec%in%do_exclude]		<<- FALSE
+		#
+		# dwd$poporder and dwd$popcolour:
+		retainedpops		<- as.character(dwd$popinfo$pop[dwd$popinfo$filter])
+		mybool				<- dwd$poporder2%in%retainedpops
+		dwd$poporder		<<- dwd$poporder2[mybool]
+		dwd$colourorder		<<- dwd$colourorder2[mybool]
+		cat("Population(s) excluded.",sep="\n")
+		}
+	}
+
+reorder_pop<-function(poporder=NULL,silent=TRUE)
+	{
+	cat("Assigning population order to be used in output plots.",sep="\n")
+	if(is.null(poporder))
+		{
+		return(cat("ERROR: no population order defined.",sep="\n")) 
+		}else{
+		cat("Ordering populations based on user defined input (poporder or pop_order flag).",sep="\n")
+		}
+	popvec2	<- as.character(dwd$popinfo$pop)
+	popvec	<- as.character(dwd$popinfo$pop[dwd$popinfo$filter])
+	if(length(popvec2)!=length(popvec))
+		{
+		cat("WARNING: resetting population filter using exclude_pop() command.",sep="\n")
+		excludepop()
+		}
+	if(length(popvec2)!=length(poporder))
+		{
+		return(cat("ERROR: length of poporder vector does not agree with expected number of populations.",sep="\n"))
+		}
+	dwd$ind$poporder		<<- factor(dwd$ind$pop,levels=poporder)
+	dwd$popinfo$poporder	<<- factor(dwd$popinfo$pop,levels=poporder)
+	#
+	dwd$poporder2			<<- vector()
+	dwd$colourorder2		<<- vector()
+	for(j in c(1:length(poporder)))
+		{
+		mypop				<- poporder[j]
+		if(silent){cat(mypop,sep="\n")}
+		popnr				<- which(popvec2==mypop)
+		dwd$poporder2[j]	<<- as.character(dwd$popinfo$pop[popnr])
+		dwd$colourorder2[j]	<<- as.character(dwd$popinfo$popcol[popnr])
+		}
+	dwd$poporder			<<- dwd$poporder2
+	dwd$colourorder			<<- dwd$colourorder2
+	cat("Finished reordering.",sep="\n")
+	}
+
+calcregionfst<-function(maxmiss=0.6,nwindows=5,silent=TRUE)
+	{
+	cat("Preparing calculation...",sep="\n")
+	#
+	loc		<- dwd$loc
+	contignames		<- unique(loc$contig)
+	ncontigs		<- length(contignames)
+	#
+	popinfo			<- dwd$popinfo
+	combitable		<- dwd$combitable
+	pairnames		<- colnames(combitable)
+	npairs			<- length(pairnames)
+	#
+	fstdf			<- dwd$fstdf
+	#
+	regionfstlist			<- list()
+	chromfstdf				<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=npairs))
+	colnames(chromfstdf)	<- pairnames
+	rownames(chromfstdf)	<- contignames
+	#
+	cat("Calculating region fst...",sep="\n")
+	for(j in c(1:ncontigs))
+		{
+		scaffoldname			<- contignames[j]
+		if(!silent){cat(j,sep="\n")}
+		if(!silent){cat(scaffoldname,sep="\n")}
+		nregions				<- floor(nrow(loc[loc$contig==scaffoldname,])/nwindows)
+		regionfstdf				<- as.data.frame(matrix(NA,nrow=nregions,ncol=npairs))
+		colnames(regionfstdf)	<- pairnames
+		regionfstdf$contig		<- scaffoldname
+		for(k in c(1:npairs))
+			{
+			pairname			<- pairnames[k]
+			if(!silent){cat(k,sep="\n")}
+			if(!silent){cat(popname,sep="\n")}
+			winmiss				<- loc$miss[loc$contig==scaffoldname]
+			winfst				<- fstdf[loc$contig==scaffoldname,pairname,drop=TRUE]
+			winfilter			<- winmiss<=maxmiss&is.finite(winfst)
+			winfst[!winfilter]	<- NA
+			#
+			regionfstdf[,k]		<- round(rollapply(winfst,width=nwindows,mean,by=nwindows,na.rm=TRUE),5)
+			chromfstdf[j,k]		<- round(mean(winfst,na.rm=TRUE),4) 
+			}
+		regionfstlist[[j]]		<- regionfstdf 
+		}
+	dwd$regionfstdf	<<- as.data.frame(do.call(rbind,regionfstlist))
+	dwd$chromfstdf	<<- chromfstdf
+	cat("Region Fst estimates have been stored in a dataframe called 'dwd$regionfstdf'.",sep="\n")
+	}
+
+# compare to bcfstats:
+bcfstats<-function()
+	{
+	x			<<- read.table("trial.bcftools.he.txt",header=TRUE)
+	colnames(x)	<<- c("name","nrefhomo","nalthomo","nhet","nmiss","bcfhe")
+	x$bcfnsites	<<- x$nrefhomo+x$nalthomo+x$nhet
+	ind			<- dwd$ind	
+	ind			<- merge(ind,x,by="name")
+	ind			<- ind[order(ind$neworder),]
+	dwd$ind		<<- ind
+	#
+	if(any(ind$name!=colnames(dwd$nmissdf)))
+		{
+		return(cat("ERROR: sample names in ind dataframe do not correspond with colnames of nmissdf.",sep="\n"))
+		}
+	#
+	plot(round(100*ind$bcfhe,4),round(ind$he,4),col=as.character(ind$popcol),pch=16,cex=2,ylim=c(0,3.5),xlim=c(0,3.5))
+	lines(c(0,100),c(0,100))
+	head(x,5)
+	}
+
+calcwindowhe<-function(silent=TRUE,maxmiss=0.6)
+	{
+	cat("Preparing calculation...",sep="\n")
+	#
+	loc		<- dwd$loc
+	contignames		<- unique(loc$contig)
+	ncontigs		<- length(contignames)
+	#
+	ind		<- dwd$ind
+	ninds			<- nrow(ind)
+	#
+	nmissdf			<- dwd$nmissdf
+	nsitesdf		<- dwd$nsitesdf
+	nheterodf		<- dwd$nheterodf
+	nalthomodf		<- dwd$nalthomodf
+	#
+	hedf					<- as.data.frame(matrix(NA,nrow=nrow(loc),ncol=ninds))
+	althomodf				<- as.data.frame(matrix(NA,nrow=nrow(loc),ncol=ninds))
+	dxydf					<- as.data.frame(matrix(NA,nrow=nrow(loc),ncol=ninds))
+	missdf					<- as.data.frame(matrix(NA,nrow=nrow(loc),ncol=ninds))
+	colnames(hedf)			<- ind$name
+	colnames(althomodf)		<- ind$name
+	colnames(dxydf)			<- ind$name
+	colnames(missdf)		<- ind$name
+	rownames(hedf)			<- loc$name
+	rownames(althomodf)		<- loc$name
+	rownames(dxydf)			<- loc$name
+	rownames(missdf)		<- loc$name
+	#
+	cat("Calculating window heterozygosity and pairwise sequence divergence...",sep="\n")
+	for(k in c(1:ninds))
+		{
+		indname				<- ind$name[k]
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(indname,sep="\n")}
+		indnmiss			<- nmissdf[,indname]
+		indnsites			<- nsitesdf[,indname]
+		indnhet				<- nheterodf[,indname]
+		indnhomo			<- nalthomodf[,indname]
+		#
+		indmiss				<- indnmiss/(indnsites+indnmiss)
+		indhet				<- indnhet/indnsites*100
+		indhomo				<- indnhomo/indnsites*100
+		inddxy				<- (indnhomo+0.5*indnhet)/indnsites*100
+		missdf[,k]			<- indmiss 
+		hedf[,k]			<- indhet
+		althomodf[,k]		<- indhomo
+		dxydf[,k]			<- inddxy
+		}
+	#
+	cat("Generating individual summary statistics...",sep="\n")
+	if(ninds>1)
+		{
+		ind$miss				<- round(apply(missdf,2,mean,na.rm=TRUE),4)
+		ind$he					<- round(apply(hedf,2,mean,na.rm=TRUE),4)
+		ind$he_sd				<- round(apply(hedf,2,sd,na.rm=TRUE),4)
+		ind$filterhe			<- round(apply(hedf[ind$miss<=maxmiss,],2,mean,na.rm=TRUE),4)
+		ind$filterhe_sd			<- round(apply(hedf[ind$miss<=maxmiss,],2,sd,na.rm=TRUE),4)
+		}else{
+		ind$miss				<- round(mean(missdf[,1],na.rm=TRUE),4)
+		ind$he					<- round(mean(hedf[,1],na.rm=TRUE),4)
+		ind$he_sd				<- round(sd(hedf[,1],na.rm=TRUE),4)
+		ind$filterhe			<- round(mean(hedf[ind$miss<=maxmiss,1],na.rm=TRUE),4)
+		ind$filterhe_sd			<- round(sd(hedf[ind$miss<=maxmiss,1],na.rm=TRUE),4)
+		}
+	# bootstrap he:
+	cat("bootstrapping...",sep="\n")
+	hematrix				<- matrix(NA,nrow=100,ncol=ninds)
+	filterhedf				<- hedf[ind$miss<=maxmiss,1,drop=FALSE]
+	ndata					<- nrow(filterhedf)
+	for(i in c(1:100))
+		{
+		if(!silent){cat(i,sep="\n")}
+		mysample			<- sample(x=c(1:ndata),size=ndata,replace=TRUE)
+		bootstraphedf		<- filterhedf[mysample,,drop=FALSE]
+		hematrix[i,]		<- round(apply(bootstraphedf,2,mean,na.rm=TRUE),4)
+		}
+	ind$filterhe_bootmean	<- round(apply(hematrix,2,mean,na.rm=TRUE),4)
+	ind$filterhe_bootsd		<- round(apply(hematrix,2,sd,na.rm=TRUE),5)
+	#
+	ind$althomo				<- round(apply(althomodf,2,mean,na.rm=TRUE),4)
+	ind$dxy					<- round(apply(dxydf,2,mean,na.rm=TRUE),4)	
+	ind$miss[is.infinite(ind$miss)]		<- NA
+	ind$he[is.infinite(ind$he)]			<- NA
+	ind$althomo[is.infinite(ind$althomo)]	<- NA
+	ind$dxy[is.infinite(ind$dxy)]			<- NA
+	#
+	dwd$ind			<<- ind
+	dwd$missdf		<<- missdf	
+	dwd$hedf		<<- hedf
+	dwd$althomodf	<<- althomodf
+	dwd$dxydf		<<- dxydf	
+	#
+	cat("Window averages of missingness, heterozygosity and Dxy have been stored in the dwd under the names 'missdf', 'hedf', and 'dxydf'.",sep="\n")
+	cat("The number of rows equals the number of windows, the number of columns equals the number of samples.",sep="\n")
+	}
+
+calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE)
+	{
+	cat("Preparing calculation...",sep="\n")
+	#
+	loc		<- dwd$loc
+	contignames		<- unique(loc$contig)
+	ncontigs		<- length(contignames)
+	#
+	ind		<- dwd$ind
+	ninds			<- nrow(ind)
+	#
+	hedf			<- dwd$hedf
+	dxydf			<- dwd$dxydf
+	missdf			<- dwd$missdf
+	nsitesdf		<- dwd$nsitesdf
+	#
+	regionhelist			<- list()
+	chromhedf				<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=ninds))
+	chromdxydf				<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=ninds))
+	chrommissdf				<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=ninds))
+	chromnsitesdf			<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=ninds))
+	colnames(chromhedf)		<- ind$name
+	colnames(chromdxydf)	<- ind$name
+	colnames(chrommissdf)	<- ind$name
+	colnames(chrommissdf)	<- ind$name
+	colnames(chromnsitesdf)	<- ind$name
+	rownames(chromhedf)		<- contignames
+	rownames(chromdxydf)	<- contignames
+	rownames(chrommissdf)	<- contignames
+	rownames(chrommissdf)	<- contignames
+	rownames(chromnsitesdf)	<- contignames
+	#
+	cat("Calculating region heterozygosity...",sep="\n")
+	for(j in c(1:ncontigs))
+		{
+		scaffoldname			<- contignames[j]
+		if(!silent){cat(j,sep="\n")}
+		if(!silent){cat(scaffoldname,sep="\n")}
+		nregions				<- floor(nrow(loc[loc$contig==scaffoldname,])/nwindows)
+		regionhedf				<- as.data.frame(matrix(NA,nrow=nregions,ncol=ninds))
+		colnames(regionhedf)	<- ind$name
+		regionhedf$contig		<- scaffoldname
+		for(k in c(1:ninds))
+			{
+			indname				<- ind$name[k]
+			if(!silent){cat(k,sep="\n")}
+			if(!silent){cat(indname,sep="\n")}
+			indmiss				<- missdf[loc$contig==scaffoldname,indname]
+			indnsites			<- nsitesdf[loc$contig==scaffoldname,indname]
+			windxy				<- dxydf[loc$contig==scaffoldname,indname]
+			winhe				<- hedf[loc$contig==scaffoldname,indname]
+			winfilter			<- indmiss<=maxmiss&is.finite(winhe)
+			windxy[!winfilter]	<- NA
+			winhe[!winfilter]	<- NA
+			#
+			regionhedf[,k]		<- round(rollapply(winhe,width=nwindows,mean,by=nwindows,na.rm=TRUE),5)
+			#
+			chromdxydf[j,k]		<- round(mean(windxy,na.rm=TRUE),4) 
+			chromhedf[j,k]		<- round(mean(winhe,na.rm=TRUE),4)  
+			chrommissdf[j,k]	<- round(mean(indmiss,na.rm=TRUE),4)  
+			chromnsitesdf[j,k]	<- round(sum(indnsites,na.rm=TRUE),4) 
+			}
+		regionhelist[[j]]		<- regionhedf 
+		}
+	dwd$regionhedf				<<- as.data.frame(do.call(rbind,regionhelist))
+	dwd$chromhedf				<<- chromhedf
+	dwd$chromdxydf				<<- chromdxydf
+	dwd$chrommissdf				<<- chrommissdf
+	dwd$chromnsitesdf			<<- chromnsitesdf
+	#
+	regionhedf					<- dwd$regionhedf[,1:ninds,drop=FALSE]
+	if(ninds>1)
+		{
+		dwd$ind$regionhe			<<- round(apply(regionhedf,2,function(x){mean(x,na.rm=TRUE)}),4)
+		dwd$ind$regionhe_sd			<<- round(apply(regionhedf,2,function(x){sd(x,na.rm=TRUE)}),4)
+		}else{
+		dwd$ind$regionhe			<<- round(mean(regionhedf[,1],na.rm=TRUE),4)
+		dwd$ind$regionhe_sd			<<- round(sd(regionhedf[,1],na.rm=TRUE),4)
+		}
+	#
+	cat("Region heterozygosity estimates have been stored in a dataframe stored as 'dwd$regionhedf'.",sep="\n")
+	cat("The number of rows equals the number of regions (by default 5 windows), the number of columns equals the number of samples plus one (column with scaffold name).",sep="\n")
+	}
+
+# find stretches of regions with low He
+findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=4,windowsize=100000,nwindows=5)
+	{
+	# nwindow: 			number of windows which make up a region (see calcregionhe function)
+	# min_rle_length: 	minimum number of adjacent regions with low heterozygosity to be considered a run of homozygosity
+	#
+	# for example: with default settings (windowsize=100000, nwindows=5, and min_rle_length=4, a ROH has minimum length of 2Mb)  
+	#
+	cat("Preparing calculation...",sep="\n")
+	#
+	loc				<- dwd$loc
+	contignames		<- unique(loc$contig)
+	ncontigs		<- length(contignames)
+	#
+	ind				<- dwd$ind
+	ninds			<- nrow(ind)
+	#
+	regionhedf		<- dwd$regionhedf
+	# 
+	# objects to store proportion (frohdf) and number (nrohdf) of ROH:
+	frohdf						<- as.data.frame(matrix(NA,ncol=ninds,nrow=ncontigs))
+	colnames(frohdf)			<- ind$name
+	rownames(frohdf)			<- contignames
+	nrohdf						<- frohdf
+	#
+	ind$length_notNA			<- 0
+	ind$lroh_max1M				<- 0
+	ind$lroh_max5M				<- 0
+	ind$lroh_above5M			<- 0
+	ind$lroh					<- 0
+	regionboollist				<- list()
+	rlelist						<- list()
+	rohlengths					<- list()
+	#
+	cat("Detecting ROHs...",sep="\n")
+	for(j in c(1:ncontigs))
+		{
+		scaffoldname			<- contignames[j]
+		if(!silent){cat(j,sep="\n")}
+		if(!silent){cat(scaffoldname,sep="\n")}
+		nregions				<- nrow(regionhedf[regionhedf$contig==scaffoldname,])
+		regionbooldf			<- as.data.frame(matrix(NA,nrow=nregions,ncol=ninds))
+		colnames(regionbooldf)	<- ind$name
+		regionbooldf$contig		<- scaffoldname
+		contigrlelist			<- list()
+		#
+		for(k in c(1:ninds))
+			{
+			indname				<- ind$name[k]
+			if(!silent){cat(k,sep="\n")}
+			if(!silent){cat(indname,sep="\n")}
+			#
+			# region he below threshold?
+			indregionhe			<- regionhedf[regionhedf$contig==scaffoldname,indname]
+			indregionbool		<- indregionhe<hethreshold
+			regionbooldf[,k]	<- indregionbool 
+			#
+			# find runs of homozygosity: 
+			rleout				<- rle(indregionbool)
+			totallength			<- sum(rleout$lengths[rleout$values=="TRUE"|rleout$values=="FALSE"],na.rm=TRUE)
+			RLEindices_all		<- which(rleout$values==TRUE)											# indices of RLE with low heterozygosity 
+			RLEindices			<- which(rleout$values==TRUE&rleout$lengths>=min_rle_length)			# indices of RLE with low heterozygosity consisting of at least n regions (as defined by min_rle_length) 
+			RLElengths			<- rleout$lengths[RLEindices]
+			#
+			# Calculate Froh (given the hethreshold and min_rle_length settings): 
+			frohdf[j,k]			<- ifelse(is.na(totallength)|totallength==0,NA,round(sum(RLElengths,na.rm=TRUE)/totallength,2))
+			nrohdf[j,k]			<- ifelse(is.na(totallength)|totallength==0,NA,length(RLElengths))
+			#
+			# Size distribution of ROHs (in Mb):
+			RLElengths_all		<- rleout$lengths[RLEindices_all]*nwindows*windowsize/1000000			
+			ind$length_notNA[k]	<- ind$length_notNA[k]+totallength*nwindows*windowsize/1000000
+			ind$lroh_max1M[k]	<- ind$lroh_max1M[k]+sum(RLElengths_all[RLElengths_all<=1],na.rm=TRUE)
+			ind$lroh_max5M[k]	<- ind$lroh_max5M[k]+sum(RLElengths_all[RLElengths_all>1&RLElengths_all<=5],na.rm=TRUE)
+			ind$lroh_above5M[k]	<- ind$lroh_above5M[k]+sum(RLElengths_all[RLElengths_all>5],na.rm=TRUE)
+			ind$lroh[k]			<- ind$lroh[k]+sum(RLElengths_all,na.rm=TRUE)
+			#
+			contigrlelist[[k]]	<- rleout
+			contigrohlengths	<- RLElengths*windowsize*nwindows/1000		# 15-07-2021
+			if(j==1)
+				{
+				rohlengths[[k]]	<- contigrohlengths
+				}else{
+				rohlengths[[k]]	<- c(rohlengths[[k]],contigrohlengths)
+				}
+			}
+		regionboollist[[j]]		<- regionbooldf
+		names(contigrlelist)	<- ind$name
+		rlelist[[j]]			<- contigrlelist
+		}
+	dwd$regionbooldf			<<- as.data.frame(do.call(rbind,regionboollist))
+	ind$froh					<- as.vector(round(apply(frohdf,2,mean,na.rm=TRUE),5))
+	ind$nroh					<- as.vector(apply(nrohdf,2,sum,na.rm=TRUE))
+	dwd$frohdf					<<- frohdf
+	dwd$nrohdf					<<- nrohdf
+	dwd$ind						<<- ind
+	#
+	names(rlelist)				<- contignames
+	dwd$rlelist					<<- rlelist
+	names(rohlengths)			<- ind$name
+	dwd$rohlengths				<<- rohlengths
+	cat("Region boolean values (indicating whether region has heterozygosity below threshold) have been stored in a dataframe stored as 'dwd$regionbooldf'.",sep="\n")
+	cat("The number of rows equals the number of regions (by default 5 windows), the number of columns equals the number of samples plus one (column with scaffold name).",sep="\n")
+	}
+
+# calculate He without ROHs:
+correcthe<-function()
+	{
+	# calculate background he (i.e. excluding runs of homozygosity)
+	ind	<- dwd$ind
+	ninds		<- nrow(ind)
+	hedf		<- dwd$regionhedf
+	booldf		<- dwd$regionbooldf
+	ind$regionhe		<- NA
+	ind$regionhe2	<- NA
+	for(j in c(1:ninds))
+		{
+		mybool					<- booldf[,j]
+		mybool[is.na(mybool)]	<- TRUE
+		myhe					<- hedf[,j]
+		myhe[!is.finite(myhe)]	<- NA
+		myhe2					<- myhe[!mybool]
+		ind$regionhe[j]			<- round(mean(myhe,na.rm=TRUE),4)
+		ind$regionhe2[j]		<- round(mean(myhe2,na.rm=TRUE),4)
+		}
+	dwd$ind	<<- ind
+	#
+	mymin		<- min(c(ind$regionhe2[ind$filter],ind$regionhe[ind$filter]),na.rm=TRUE)
+	mymax		<- max(c(ind$regionhe2[ind$filter],ind$regionhe[ind$filter]),na.rm=TRUE)
+	plot(ind$regionhe2[ind$filter],ind$regionhe[ind$filter],col=as.character(ind$popcol),pch=16,ylim=c(mymin,mymax),xlim=c(mymin,mymax),xlab="He without ROH",ylab="He with ROH",cex=2.5)
+	lines(x=c(0,1),y=c(0,1))
+	}
+
+# roh lengths distribution
+getrohlengths<-function(nrwindows=NULL,windowsize=NULL)
+	{
+	if(is.null(nrwindows)|is.null(windowsize))
+		{
+		return(cat("ERROR: define nrwindows and windowsize.",sep="\n"))
+		}
+	rlelist		<- dwd$rlelist
+	scafnames	<- names(rlelist)
+	nscafs		<- length(scafnames)
+	#
+	ninds		<- nrow(dwd$ind)
+	lrohlist	<- list()	# number of rles
+	lrohlist2	<- list()	# length in bp (#rle*nrwindows*windowsize)
+	for(j in c(1:ninds))
+		{
+		myind		<- as.character(dwd$ind$name[k])
+		indrle		<- vector()
+		indscafvec	<- vector()
+		for(k in c(1:nscafs))
+			{
+			scafname	<- scafnames[k]
+			indrlescaf	<- dwd$rlelist[[k]][[j]]
+			indrlescaf	<- indrlescaf$lengths[indrlescaf$values==TRUE&!is.na(indrlescaf$values)]
+			indscafvec	<- c(indscafvec,rep(scafname,length(indrlescaf)))
+			indrle		<- c(indrle,indrlescaf)
+			}
+		indrle2			<- indrle*nrwindows*windowsize
+		lrohlist[[j]]	<- indrle
+		lrohlist2[[j]]	<- indrle2
+		# for convenience, store data in dataframe (in addition to list):
+		indrohdf		<- data.frame("ind"=myind,"scaf"=indscafvec,"length"=indrle2)
+		if(j==1)
+			{
+			allrohdf	<- indrohdf
+			}else{
+			allrohdf	<- rbind(allrohdf,indrohdf)
+			}
+		}
+	names(lrohlist)		<- as.character(dwd$ind$name)
+	dwd$lrohlist		<<- lrohlist
+	dwd$lrohlist2		<<- lrohlist2
+	dwd$allrohdf		<<- allrohdf
+	cat("ROH-lengths have been stored at 'dwd$lrohlist' (number of RLEs), and dwd$lrohlist2 (lengths in bp), as well as in dataframe dwd$allrohdf.",sep="\n")
+	}
+
+findmaxroh<-function(nrwindows=NULL,windowsize=NULL)
+	{
+	if(is.null(nrwindows)|is.null(windowsize))
+		{
+		return(cat("ERROR: define nrwindows and windowsize.",sep="\n"))
+		}
+	rlelist		<- dwd$rlelist
+	ninds		<- nrow(dwd$ind)
+	lrohlist	<- list()	# number of rles
+	lrohlist2	<- list()	# length in bp (#rle*nrwindows*windowsize)
+	for(j in c(1:ninds))
+		{
+		indrle		<- vector()
+		for(k in c(1:length(rlelist)))
+			{
+			indrlescaf	<- dwd$rlelist[[k]][[j]]
+			indrlescaf	<- indrlescaf$lengths[indrlescaf$values==TRUE&!is.na(indrlescaf$values)]
+			indrle		<- c(indrle,indrlescaf)
+			}
+		lrohlist[[j]]	<- indrle
+		lrohlist2[[j]]	<- indrle*nrwindows*windowsize
+		}
+	names(lrohlist)		<- as.character(dwd$ind$name)
+	dwd$lrohlist		<<- lrohlist
+	dwd$lrohlist2		<<- lrohlist2
+	cat("ROH-lengths have been stored at 'dwd$lrohlist' (number of RLEs) and dwd$lrohlist2 (lengths in bp).",sep="\n")
+	}
+
+getrohbin<-function(silent=TRUE)
+	{
+	if(is.null(dwd$lrohlist2))
+		{
+		return(cat("ERROR: dwd$lrohlist2 does not exist. Did you run the getrohlengths function?",sep="\n"))
+		}
+	mybreaks		<- c(0,0.2,0.5,1.0,2.0,5.0,10,200.0)
+	minlengths		<- mybreaks[-length(mybreaks)]
+	mylabels		<- c("0-0.2","0.2-0.5","0.5-1","1-2","2-5","5-10",">10")
+	nbins			<- length(minlengths)
+	#
+	ind				<- dwd$ind		
+	ninds			<- nrow(ind)
+	#
+	nrohbinmat			<- matrix(NA,nrow=ninds,ncol=nbins)
+	rownames(nrohbinmat)<- ind$name
+	colnames(nrohbinmat)<- paste("X",minlengths,sep="_")
+	lrohbinmat			<- nrohbinmat
+	frohbinmat			<- nrohbinmat
+	for(j in c(1:ninds))
+		{
+		if(!silent){cat(as.character(ind$name[j]),sep="\n")}
+		indrohs				<- dwd$lrohlist2[[j]]/1000000
+		# Froh sensitivity:
+		indtotalmb			<- ind$length_notNA[j]
+		#for(k in c(1:nbins))
+		#	{
+		#	minlength		<- minlengths[k]
+		#	subrohs			<- indrohs[indrohs>minlength]
+		#	lrohbinmat[j,k]	<- sum(subrohs,na.rm=TRUE)
+		#	frohbinmat[j,k]	<- round(sum(subrohs,na.rm=TRUE)/indtotalmb,3)
+		#	}
+		# ROH bins:
+		extravec			<- c(0.1,0.25,0.75,1.5,2.5,7.5,15)
+		indrohs				<- c(indrohs,extravec)										# add one observation per category, so all categories are represented at least once (later subtracted)
+		rohbins				<- cut(indrohs,mybreaks)
+		#
+		nrohbin				<- aggregate(indrohs,by=list(rohbins),FUN=length) 
+		colnames(nrohbin)	<- c("size","nrohs")
+		nrohbin$nrohs		<- nrohbin$nrohs-1										# subtract the observations we added a few lines above
+		nrohbinmat[j,]		<- nrohbin$nrohs
+		#
+		lrohbin				<- aggregate(indrohs,by=list(rohbins),FUN=sum) 
+		colnames(lrohbin)	<- c("size","lrohs")
+		lrohbin$lrohs		<- lrohbin$lrohs-extravec									# subtract the observations we added a few lines above
+		lrohbinmat[j,]		<- lrohbin$lrohs
+		frohbinmat[j,]		<- lrohbin$lrohs/indtotalmb
+		}
+	dwd$nrohbindf	<<- as.data.frame(nrohbinmat)
+	dwd$lrohbindf	<<- as.data.frame(lrohbinmat)
+	dwd$frohbindf	<<- as.data.frame(frohbinmat)
+	dwd$rohbinlabels<<- mylabels
+	#
+	dwd$ind$froh2	<<- rowSums(dwd$frohbindf)
+	dwd$ind$lroh2	<<- rowSums(dwd$lrohbindf)
+	dwd$ind$nroh2	<<- rowSums(dwd$nrohbindf)
+	cat("ROH-bin data has been stored at dwd$rohbindf, dwd$lrohbindf and dwd$frohbindf.",sep="\n")
+	}
+
+rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotname="ROHn_barplot",export=NULL,yline=5,mywidth=0.75,legendcex=1.5,legendpos="bottomleft",addlegend=TRUE,legx=NULL,legy=NULL,mycex=1,ypopcol=NULL)
+	{
+	if(is.null(mycolours))
+		{
+		mycolours	<- c("grey90","grey70","grey50","steelblue3","mediumpurple1","darkorchid4","midnightblue")
+		}
+	ind		<- dwd$ind
+	ind		<- droplevels(ind[ind$filter,])
+	ninds	<- nrow(ind)
+	#
+	mydf	<- inputdf[dwd$ind$filter,,drop=FALSE]
+	mymat	<- t(as.matrix(mydf))
+	if(!is.null(ypopcol))
+		{
+		ymax	<- max(colSums(mymat),na.rm=TRUE)*1.05		
+		}else{
+		ymax	<- max(colSums(mymat),na.rm=TRUE)
+		}
+	#
+	# reorder:
+	mymat	<- mymat[,order(ind$poporder)]
+	ind		<- ind[order(ind$poporder),]
+	#
+	if(!is.null(export))
+		{
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=ninds*mywidth*100,height=900)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=ninds*mywidth,height=8)}
+		}
+	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	# barplot(mymat,las=2,col=mycolours,border=NA,names.arg=ind$name,las=2,cex.names=mycex)
+	mybarplot	<- barplot(mymat,las=2,col=mycolours,border=NA,names.arg=ind$name,las=2,cex.names=mycex,ylim=c(0,ymax))
+	#
+	if(!is.null(ypopcol))
+		{
+		mybarplot2	<- mybarplot[1:ninds]
+		mypops	<- unique(as.character(ind$pop))
+		for (mypop in mypops)
+			{
+			popindex	<- which(as.character(ind$pop)==mypop)
+			npopind		<- length(popindex)
+			popcol		<- as.character(ind$popcol[popindex][1])
+			points(x=mybarplot2[popindex],y=rep(ypopcol,npopind),cex=2.5,col=popcol,pch=15)
+			#axis(1,at=mybarplot[popindex],labels=ind$name[popindex],col.axis=popcol,las=2,mycex)
+			}
+		}
+	mtext(side=2,ylabel,line=yline,cex=2.75,outer=TRUE,las=0)
+	if(addlegend)
+		{
+		mylegend	<- dwd$rohbinlabels
+		if(is.null(legy)|is.null(legy))
+			{
+			legend(legendpos,legend=rev(mylegend),fill=rev(mycolours),bty='n',cex=legendcex,title="ROH-size (Mb):",y.intersp=0.75)
+			}else{
+			legend(x=legx,y=legy,legend=rev(mylegend),fill=rev(mycolours),bty='n',cex=legendcex,title="ROH-length (Mb):",y.intersp=0.75)
+			}
+		#legend(legendpos,legend=rev(mylegend),fill=rev(mycolours),bty='n',cex=legendcex)
+		}
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Stacked ROH barplot with ROH-score per bin per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+# one plot per individual:
+rohlengthhisto<-function(myind=1,export=NULL)
+	{
+	if(is.null(dwd$lrohlist2))
+		{
+		return(cat("ERROR: dwd$lrohlist2 does not exist. Did you run the getrohlengths function?",sep="\n"))
+		}
+	indrohs			<- dwd$lrohlist2[[1]]/1000000  
+	if(!is.null(export))
+		{
+		plotname	<- paste("ROHsizes",paste("ind",myind,sep=""),"histo",sep="_")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=8,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=8,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=8,height=8)}
+		}
+	# outline of plot:
+	par(mar=c(6,7,2,2),cex.axis=2,cex.lab=2.5)
+	hist(indrohs,breaks=30,xlab="",ylab="",las=1,main="",col="grey70",border="grey50")
+	mtext(side=1,"ROH-length (Mb)",line=4,cex=2.5)
+	mtext(side=2,"Number of ROHs",line=4.5,cex=2.5)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Histogram with ROH-sizes exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+# one plot per individual:
+rohlengthscatter<-function(export=NULL,minlength=NULL,myind=1)
+	{
+	if(is.null(dwd$lrohlist2))
+		{
+		return(cat("ERROR: dwd$lrohlist2 does not exist. Did you run the getrohlengths function?",sep="\n"))
+		}
+	indrohs			<- dwd$lrohlist2[[myind]]/1000000
+	if(!is.null(export))
+		{
+		plotname	<- paste("ROHsizes",paste("ind",myind,sep=""),"scatter",sep="_")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=8,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=8,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=8,height=8)} 
+		}
+	#
+	# outline of plot:
+	par(mar=c(6,7,2,2),cex.axis=2,cex.lab=2.5)
+	plot(indrohs,xlab="",ylab="",las=1,main="",col="grey70")
+	mtext(side=1,"ROH index",line=4,cex=2.5)
+	mtext(side=2,"ROH-length (Mb)",line=4.5,cex=2.5)
+	if(!is.null(minlength))
+		{
+		abline(h=minlength/1000000,lty=2)
+		}
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Scatterplot with ROH-sizes exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	if(!is.null(minlength))
+		{
+		nrohs	<- length(indrohs[indrohs>=(minlength/1000000)])
+		cat("Number of ROHs with specified minimum length:",sep="\n")
+		cat(nrohs,sep="\n")
+		}
+	}
+
+plotld<-function()
+	{
+	x		<- read.table("mywindowld.10000.allsites_run.txt",header=TRUE)
+	x$LD2	<- x$LD_all*500/x$dist_all		# correction assuming linear relation ship at first part of the slope
+	x$prop_S<- x$nrsnps/x$totalbp
+	#plot(x$LD2[x$prop_S<0.04],x$prop_S[x$prop_S<0.04],ylim=c(0.005,0.03),xlim=c(0,0.8),pch=16)
+	#plot(x$LD2[x$dist_all<520&x$dist_all>480&x$contig=="HiC_scaffold_1"],x$prop_S[x$dist_all<520&x$dist_all>480&x$contig=="HiC_scaffold_1"],pch=16,ylab="proportion segregating sites",xlab="LD (R2)",xlim=c(0,1),cex=0.5)
+	plot(x$LD2[x$dist_all<520&x$dist_all>480&x$nrsnps>20&x$contig=="HiC_scaffold_1"&x$startbp>200000],x$prop_S[x$dist_all<520&x$dist_all>480&x$nrsnps>20&x$contig=="HiC_scaffold_1"&x$startbp>200000],pch=16,ylab="proportion segregating sites",xlab="LD (R2)",xlim=c(0,1),cex=0.5)
+	}
+
+
+# No clear relation, but small dataset, and windows might be too big.
+genestat<-function()
+	{
+	x				<- read.table("KJ1969genes.bed",sep="\t")
+	y				<- x[,c(1:5)]
+	names(y)		<- c("contig","startbp","endbp","gene","rate")
+	y$windowstart	<- NA
+	y$windowend		<- NA
+	y$dxy			<- NA
+	y$pi			<- NA
+	#
+	dxydf			<- dwd$popdxydf
+	pidf			<- dwd$pidf
+	windf			<- dwd$loc
+	#
+	ngenes			<- nrow(y)
+	for (k in (c(1:ngenes)))
+		{
+		mycontig		<- as.character(y$contig[k])
+		mystartbp		<- y$startbp[k]
+		mywinnr			<- which(windf$contig==mycontig&windf$startbp<mystartbp&windf$endbp>mystartbp)
+		cat(mywinnr,sep="\n")
+		y$windowstart[k]<- windf$startbp[mywinnr]	
+		y$windowend[k]	<- windf$endbp[mywinnr]
+		y$dxy[k]		<- mean(unlist(dxydf[mywinnr,]))
+		y$pi[k]			<- mean(unlist(pidf[mywinnr,]))
+		}
+	mygenes	<<- y
+	}
+
+plotkaryo<-function(plotlabel="LD",genedf=NULL,addmiss=FALSE,export=FALSE,silent=TRUE,dolines=TRUE,win_size=10000,maxmiss=0.6,minsnps=20,myregion=NULL)
+	{
+	loc		<- dwd$loc
+	popinfo			<- dwd$popinfo
+	#
+	scaffoldnames	<- unique(as.character(loc$contig))
+	nscaffolds		<- length(scaffoldnames)
+	if(export)
+		{
+		symboltype	<- ifelse(dolines,"linechart","scatter")
+		plotname	<- paste(plotlabel,symboltype,win_size,"allscaffolds.pdf",sep=".")
+		pdf(plotname,width=14,height=nscaffolds*0.25+5)
+		}
+	par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,9))
+	#
+	windowmiss				<- loc$miss
+	windownpoly				<- loc$nrsnps
+	windowmeandist			<- loc$dist_meta
+	winfilter				<- windowmiss<=maxmiss
+	npolyfilter				<- windownpoly>=minsnps
+	distfilter				<- windowmeandist>400&windowmeandist<600
+	genomescores1			<- loc$LD_meta2
+	genomescores2			<- loc$prop_S*10
+	genomescores1[!winfilter]<- NA
+	genomescores2[!winfilter]<- NA 
+	genomescores1[!npolyfilter]<- NA
+	genomescores2[!npolyfilter]<- NA
+	genomescores1[!distfilter]<- NA
+	genomescores2[!distfilter]<- NA
+	#
+	if(!silent){cat("Creating plot outline...",sep="\n")}
+	windowmid				<- loc$mid
+	myxmax					<- max(loc$mid,na.rm=TRUE)
+	myxmin					<- min(loc$mid,na.rm=TRUE)
+	if(is.null(myregion))
+		{
+		myxrange			<- seq(myxmin,myxmax,myxmin)
+		}else{
+		myxrange			<- seq(myregion[1],myregion[2],myxmin)
+		}
+	#
+	plot(myxrange,rep(0.1,length(myxrange)),col="white",ylim=c(0,nscaffolds),pch=16,yaxt='n',ylab="",xlab="")
+	for(k in c(1:nscaffolds))
+		{
+		scaffoldname			<- scaffoldnames[k]
+		scaffoldfilter			<- as.character(loc$contig)==scaffoldname
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(scaffoldname,sep="\n")}
+		scafscores1				<- genomescores1[scaffoldfilter]
+		scafscores2				<- genomescores2[scaffoldfilter]
+		scafmid					<- windowmid[scaffoldfilter]	
+		if(!is.null(genedf))
+			{
+			scafgenedf			<- genedf[as.character(genedf$contig)==scaffoldname,]
+			rect(xleft=scafgenedf$startpos,ybottom=k-1,xright=scafgenedf$endpos,ytop=k,col="grey90",border=NA)
+			}
+		if(dolines)
+			{
+			lines(scafmid,scafscores1+(k-1),col="darkred",lwd=0.5)
+			lines(scafmid,scafscores2+(k-1),col="grey60",lwd=0.5)
+			}else{
+			points(scafmid,scafscores1+(k-1),col="darkred",pch=16,cex=0.5)
+			points(scafmid,scafscores2+(k-1),col="grey60",pch=16,cex=0.5)
+			}
+		}
+	axis(side=4,at=seq(0.25,nscaffolds-0.75,1),label=scaffoldnames,cex=1,las=1)
+	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
+	#mtext("LD scores",side=3,line=2,cex=1.75)
+	mtext("Position (Mb)",side=1,line=2.75,cex=2)
+	mtext("LD (R^2)",side=2,line=4,cex=2)
+	#axis(side=2,at=seq(0.3,nscaffolds-0.7,1),label=meanpopscores,cex=0.25,las=1)
+	if(export)
+		{
+		dev.off()
+		if(!silent){cat("Plot has been exported to directory:",sep="\n")}
+		if(!silent){cat(getwd(),sep="\n")}
+		}
+	}
+
+exphisto<-function(totalbp=30000,indhe=0.003,nwindows=20000)
+	{
+	# cumulative probability:
+	myprob <- ppois(q=c(1:50),lambda=totalbp*indhe,lower.tail=TRUE)
+	# probability:
+	plot(x=c(1:50),y=myprob)
+	mydensity <- dpois(x=c(0:100),lambda=totalbp*indhe)
+	#
+	myexp	<<- round((rpois(n=nwindows,lambda=totalbp*indhe*100))/totalbp,4)
+	#
+	myexp1	<- round((rpois(n=1000,lambda=10000*0.003*100))/10000,4)
+	myexp2	<- round((rpois(n=2000,lambda=20000*0.003*100))/20000,4)
+	myexp3	<- round((rpois(n=5000,lambda=30000*0.003*100))/30000,4)
+	myexp4	<- round((rpois(n=2000,lambda=40000*0.003*100))/40000,4)
+	myexp5	<- round((rpois(n=1000,lambda=50000*0.003*100))/50000,4)
+	myexp	<- c(myexp1,myexp2,myexp3,myexp4,myexp5)
+	}
+
+# number of ROHs too low for proper fit of density function 
+indlisthisto<-function(export=NULL,inputlist=dwd$lrohlist2,mybreaks=seq(-0.05,5,0.05),silent=TRUE,ymax=500)
+	{
+	if(is.null(inputlist))
+		{
+		return(cat("ERROR: specified inputlist does not exist. If inputlist is dwd$lrohlist2, did you run the getrohlengths function?",sep="\n"))
+		}
+	popinfo		<- droplevels(dwd$popinfo[dwd$popinfo$filter,,drop=FALSE])
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	n_allinds	<- nrow(dwd$ind)
+	inputlist	<- inputlist[dwd$ind$filter]
+	#
+	#
+	allmax		<- max(unlist(inputlist),na.rm=TRUE)
+	allmax		<- allmax/1000000
+	if(!silent){cat(allmax,sep="\n")}
+	if(allmax>max(mybreaks))
+		{
+		return(cat("ERROR: mybreaks do not span entire range. Redefine 'mybreaks' flags.",sep="\n"))
+		}
+	if(!is.null(export))
+		{
+		plotname	<- paste("ROHsizes","histo",sep="_")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=8,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=8,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=8,height=8)}
+		}
+	# outline of plot:
+	par(mar=c(6,5,2,2),cex.axis=2,cex.lab=2.5)
+	indrohs			<- inputlist[[1]]/1000000
+	hist(indrohs,breaks=mybreaks,xlim=c(0,allmax),freq=TRUE,col="white",border=NA,ylim=c(0,ymax),xlab="",ylab="",main="",las=1)
+	mtext(side=1,"ROH-length (Mb)",line=4,cex=2.5)
+	mtext(side=2,"Number of ROHs",line=4.5,cex=2.5)
+	#
+	for(k in c(1:ninds))
+		{
+		if(!silent){cat(ind$name[k],sep="\n")}
+		indrohs			<- inputlist[[k]]/1000000
+		mydensity		<- density(indrohs,na.rm=TRUE)
+		lines(mydensity$x,mydensity$y,col=popcolours[k],lwd=5)
+		}
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Histogram with ROH-sizes exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+runindhisto<-function(exporttype=NULL,missrange=seq(0.3,0.9,0.1),my_breaks=seq(-0.01,5,0.005),plot_name="He_histo_window",input_df=dwd$regionhedf,miss_df=NULL,window_size=100000,n_windows=5,x_max=0.6,y_max=15,silent=TRUE,legend_cex=2.5)
+	{
+	for(missvalue in missrange)
+		{
+		if(!silent){cat(missvalue,sep="\n")}
+		myplotname	<- paste(plot_name,"maxmiss",missvalue,sep="_")
+		indhisto(export=exporttype,plotname=myplotname,mybreaks=my_breaks,inputdf=input_df,missdf=miss_df,maxmiss=missvalue,silent=TRUE,windowsize=window_size,nwindows=n_windows,xmax=x_max,ymax=y_max,legendcex=legend_cex)
+		}
+	}
+
+indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,legendpos="topright",legendcex=2.5,plotname="He_histo_region",inputdf=dwd$regionhedf,missdf=NULL,maxmiss=0.9,silent=TRUE,windowsize=100000,nwindows=5)
+	{
+	popinfo		<- droplevels(dwd$popinfo[dwd$popinfo$filter,,drop=FALSE])
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	n_allinds	<- nrow(dwd$ind)
+	inputmat	<- as.matrix(inputdf[,1:n_allinds,drop=FALSE])
+	inputmat	<- inputmat[,dwd$ind$filter,drop=FALSE]
+	if(!is.null(missdf))
+		{
+		missmat	<- as.matrix(missdf[,1:n_allinds,drop=FALSE])
+		myfilter<- missmat[,1]<=maxmiss
+		}else{
+		myfilter<- rep(TRUE,nrow(inputmat)) 
+		}
+	#
+	if(!silent){cat(max(inputmat[myfilter,1],na.rm=TRUE),sep="\n")}
+	if(max(inputmat[myfilter,1],na.rm=TRUE)>max(mybreaks))
+		{
+		return(cat("ERROR: mybreaks do not span entire range.",sep="\n"))
+		}
+	#
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(is.null(missdf),plotname,paste(plotname,maxmiss,sep="_"))
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=8,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=8,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=8,height=8)} 
+		}
+	# outline of plot:
+	par(mar=c(6,5,2,2),cex.axis=2,cex.lab=2.5)
+	hist(inputmat[myfilter,1],breaks=mybreaks,xlim=c(0,xmax),freq=FALSE,col="white",border=NA,ylim=c(0,ymax),xlab="",ylab="Density",main="",las=2)
+	mtext(side=1,"Heterozygosity (%)",line=4.5,cex=2.5)
+	#
+	nwindowsvec	<- vector()
+	for(k in c(1:ninds))
+		{
+		if(!is.null(missdf))
+			{
+			myfilter	<- missmat[,k]<=maxmiss
+			}else{
+			myfilter	<- rep(TRUE,nrow(inputdf))
+			}
+		nwindowsvec[k]		<- length(myfilter[myfilter])
+		if(!silent){cat(ind$name[k],sep="\n")}
+		if(!silent){cat(length(myfilter[myfilter]),sep="\n")}
+		mydensity<- density(inputmat[myfilter,k],na.rm=TRUE)
+		lines(mydensity$x,mydensity$y,col=popcolours[k],lwd=5)
+		}
+	if(!is.null(missdf))
+		{
+		# assuming inputdf is dwd$windowdf
+		meannwindows<- round(mean(nwindowsvec))
+		mtext(side=3,paste("maxmiss:",maxmiss,sep=" "),line=0.5,cex=2)
+		mtext(side=3,paste(meannwindows," ",windowsize/1000,"K windows",sep=""),line=-1.25,cex=2)
+		}else{
+		# assuming inputdf is dwd$regiondf
+		mtext(side=3,paste("maxmiss:",maxmiss,sep=" "),line=0.5,cex=2)
+		mtext(side=3,paste("per ",nwindows," adjacent ",windowsize/1000,"K windows",sep=""),line=-1.25,cex=1.75)
+		}
+	# mask negative:
+	rect(-1,-ymax,0,ymax,col="white",border="white")	
+	#legend(legendpos,legend=popinfo$pop,bty='n',fill=as.character(popinfo$popcol),cex=legendcex)
+	legend(legendpos,legend=dwd$poporder,bty='n',fill=dwd$colourorder,border=dwd$colourorder,cex=legendcex)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Histograms showing genome wide scores per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+indbarplot<-function(export=NULL,plotname="Genomewide_regionHe_bootstrap",ylabel="Heterozygosity (%)",yline=5.5)
+	{
+	ind	<- dwd$ind
+	ind	<- ind[order(ind$pop),]
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	#
+	btmean		<- ind$filterhe_bootmean
+	btsd		<- ind$filterhe_bootsd
+	ymax		<- 1.05*max(btmean+2*btsd,na.rm=TRUE)
+	#
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		if(export=="eps"){postscript(paste(plotname,"ind.barplot.eps",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"ind.barplot.pdf",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="png"){png(paste(plotname,"ind.barplot.png",sep="."),width=ninds*mywidth2,height=900)}
+		if(export=="wmf"){win.metafile(paste(plotname,"ind.barplot.wmf",sep="."),width=ninds*mywidth,height=8)}
+		}
+	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	barcenters	<- barplot(ind$filterhe,col=popcolours,border=NA,names.arg=ind$name,las=2,yaxt='n',ylim=c(0,ymax))
+	axis(side=2,cex.axis=2.5,las=1)
+	arrows(barcenters,btmean-btsd*2,barcenters,btmean+btsd*2,lwd=0.5,angle=90,code=3,length=0.03)
+	mtext(side=2,"Heterozygosity (%)",line=yline,cex=2.75,outer=TRUE,las=0)
+	#mtext(side=1,"Sample",line=6.5,cex=1.75)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Barplot with average genome wide scores (and bootstrap 95% confidence intervals) per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+indlistboxplot<-function(export=NULL,inputlist=dwd$rohlengths,plotname="ROHlengths_boxplot",ylabel="ROH length (Kb)",yline=3.25,maxmiss=0.6)
+	{
+	ind			<- dwd$ind
+	mypoporder	<- order(ind$pop)
+	ind			<- ind[mypoporder,]
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	#	
+	inputlist	<- inputlist[mypoporder]
+	#
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		if(export=="eps"){postscript(paste(plotname,"ind.eps",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"ind.pdf",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="png"){png(paste(plotname,"ind.png",sep="."),width=ninds*mywidth2,height=900)}
+		if(export=="wmf"){win.metafile(paste(plotname,"ind.wmf",sep="."),width=ninds*mywidth,height=8)}
+		}
+	par(oma=c(9,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	boxplot(inputlist,border="white",col="white",cex.axis=1.5,pch=16,outline=TRUE,las=2,xlab="",ylab="")
+	boxplot(inputlist,border=popcolours,col="grey90",outline=FALSE,las=2,xlab="",ylab="",add=TRUE,xaxt='n',yaxt='n')
+	stripchart(inputlist,vertical=TRUE,method="jitter",pch=16,cex=1,col=popcolours,bg="bisque",add=TRUE) 
+	mtext(side=2,ylabel,line=yline,cex=1.75,outer=TRUE,las=0)
+	#mtext(side=1,"Sample",line=6.5,cex=1.75)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Boxplot has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.6)
+	{
+	loc	<- dwd$loc
+	#
+	ind	<- dwd$ind
+	mypoporder	<- order(ind$pop)
+	ind	<- ind[mypoporder,]
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	#	
+	if(nrow(inputdf)==nrow(loc))
+		{
+		inputmat	<- as.matrix(inputdf[loc$miss<=maxmiss,1:ninds])
+		}else{
+		inputmat	<- as.matrix(inputdf[,1:ninds])
+		}
+	inputmat		<- inputmat[,mypoporder]
+	#
+	# thin and convert to list:
+	sampleindex	<- sample(c(1:nrow(inputmat)),samplesize,replace=FALSE)
+	inputmat2	<- inputmat[sampleindex,]
+	inputlist	<- split(inputmat2,rep(1:ninds,each=nrow(inputmat2)))
+	#
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		plotlabel	<- paste("n",samplesize,sep="")
+		if(export=="eps"){postscript(paste(plotname,plotlabel,"ind.eps",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,plotlabel,"ind.pdf",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="png"){png(paste(plotname,plotlabel,"ind.png",sep="."),width=ninds*mywidth2,height=900)}
+		if(export=="wmf"){win.metafile(paste(plotname,plotlabel,"ind.wmf",sep="."),width=ninds*mywidth,height=8)}
+		}
+	par(oma=c(9,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	boxplot(inputmat,border=popcolours,col="grey90",cex.axis=1.5,pch=16,outline=FALSE,ylim=c(0,ymax),las=2,xlab="",ylab="")
+	stripchart(inputlist,vertical=TRUE,method="jitter",pch=16,cex=0.5,col=popcolours,bg="bisque",add=TRUE) 
+	mtext(side=2,ylabel,line=yline,cex=1.75,outer=TRUE,las=0)
+	#mtext(side=1,"Sample",line=6.5,cex=1.75)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Boxplot with average genome wide scores per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+popboxplot<-function(export=NULL,ymax=NULL,ymin=NULL,indscore="regionhe",plotname="Genomewide_He",ylabel="Heterozygosity (%)",yline=3.25)
+	{
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,])
+	popinfo		<- droplevels(dwd$popinfo[dwd$popinfo$filter,])
+	popcolours	<- dwd$colourorder
+	npops		<- nrow(popinfo)
+	#
+	inputdf				<- droplevels(ind[,c("poporder",indscore)])
+	colnames(inputdf)	<- c("pop","indscore")
+	#
+	if(is.null(ymax))
+		{
+		ymax	<- max(inputdf$indscore,na.rm=TRUE)*1.05
+		}
+	if(is.null(ymin))
+		{
+		ymin	<- min(inputdf$indscore,na.rm=TRUE)*0.95
+		}
+	#
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		if(export=="eps"){postscript(paste(plotname,"pop.eps",sep="."),width=npops*mywidth,height=6)}
+		if(export=="pdf"){pdf(paste(plotname,"pop.pdf",sep="."),width=npops*mywidth,height=6)}
+		if(export=="png"){png(paste(plotname,"pop.png",sep="."),width=npops*mywidth2,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"pop.wmf",sep="."),width=npops*mywidth,height=6)}
+		}
+	par(oma=c(5,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	boxplot(inputdf$indscore~inputdf$pop,border=popcolours,col="grey90",cex.axis=1.5,pch=16,outline=FALSE,ylim=c(ymin,ymax),las=2,xlab="",ylab="")
+	stripchart(indscore~pop,data=inputdf,vertical=TRUE,method="jitter",pch=16,cex=1.5,col=popcolours,bg="bisque",add=TRUE) 
+	mtext(side=2,ylabel,line=yline,cex=1.75,outer=TRUE,las=0)
+	#mtext(side=1,"Population",line=6.5,cex=1.75)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Boxplot with average genome wide scores per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+popboxplot2<-function(export=NULL,ymax=NULL,ymin=NULL,indscore1="regionhe",indscore2="regionhe2",plotname="He_with_vs_withoutROH",label1="With ROHs",label2="Without ROHs",ylabel="Genome-wide He (%)",yline=3.25)
+	{
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,])
+	popinfo		<- droplevels(dwd$popinfo[dwd$popinfo$filter,])
+	popcolours	<- dwd$colourorder
+	npops		<- nrow(popinfo)
+	#
+	inputdf				<- droplevels(ind[,c("poporder",indscore1,indscore2)])
+	colnames(inputdf)	<- c("pop","indscore1","indscore2")
+	#
+	if(is.null(ymax))
+		{
+		ymax	<- max(inputdf$indscore1,inputdf$indscore2,na.rm=TRUE)*1.05
+		}
+	if(is.null(ymin))
+		{
+		ymin	<- min(inputdf$indscore1,inputdf$indscore2,na.rm=TRUE)*0.95
+		}
+	#
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		nfac=1
+		if(export=="eps"){postscript(paste(plotname,"pop.eps",sep="."),width=npops*mywidth*nfac,height=6)}
+		if(export=="pdf"){pdf(paste(plotname,"pop.pdf",sep="."),width=npops*mywidth*nfac,height=6)}
+		if(export=="png"){png(paste(plotname,"pop.png",sep="."),width=npops*mywidth2*nfac,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"pop.wmf",sep="."),width=npops*mywidth*nfac,height=6)}
+		}
+	par(mfrow=c(1,2),oma=c(5,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	# plot 1:
+	boxplot(inputdf$indscore1~inputdf$pop,border=popcolours,col="grey90",cex.axis=1.5,pch=16,outline=FALSE,ylim=c(ymin,ymax),las=2,xlab="",ylab="")
+	stripchart(indscore1~pop,data=inputdf,vertical=TRUE,method="jitter",pch=16,cex=1.5,col=popcolours,bg="bisque",add=TRUE) 
+	mtext(side=2,ylabel,line=yline,cex=1.75,outer=TRUE,las=0)
+	mtext(side=3,label1,line=-2,cex=1.75)
+	# plot 2:
+	boxplot(inputdf$indscore2~inputdf$pop,border=popcolours,col="grey90",cex.axis=1.5,pch=16,outline=FALSE,ylim=c(ymin,ymax),las=2,xlab="",ylab="",yaxt='n')
+	stripchart(indscore2~pop,data=inputdf,vertical=TRUE,method="jitter",pch=16,cex=1.5,col=popcolours,bg="bisque",add=TRUE) 
+	mtext(side=3,label2,line=-2,cex=1.75)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Boxplots with average genome wide scores per sample has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+group_plot<-function(export=NULL,plotlabel="poptype",ylabel=NULL,indscore=NULL,groupvector=NULL,grouplevels=NULL)
+	{
+	ind		<- droplevels(dwd$ind[dwd$ind$filter,])
+	if(is.null(indscore)|is.null(groupvector)|is.null(grouplevels))
+		{
+		return(cat("ERROR: Please define input values to the flags indscore, groupvector, and grouplevels.",sep="\n"))
+		}
+	if(!groupvector%in%colnames(ind))
+		{
+		return(cat("ERROR: groupvector column name not present in dwd$ind dataframe.",sep="\n"))
+		}
+	if(!indscore%in%colnames(ind))
+		{
+		return(cat("ERROR: indscore column name not present in dwd$ind dataframe.",sep="\n"))
+		}
+	indstemp				<- ind[,c("pop","popcol",indscore,groupvector)]
+	colnames(indstemp)		<- c("pop","popcol","indscore","group")
+	indstemp$groupfactor	<- factor(as.character(indstemp$group),levels=grouplevels) 
+	#
+	ngroups					<- length(grouplevels)
+	if(!is.null(export))
+		{
+		mywidth=0.75
+		mywidth2=75
+		plotname		<- "Group_boxplot"
+		if(export=="eps"){postscript(paste(plotname,plotlabel,"eps",sep="."),family=mysambar$myfont,width=ngroups*mywidth+2,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,plotlabel,"pdf",sep="."),family=mysambar$myfont,width=ngroups*mywidth+2,height=8)}
+		if(export=="png"){png(paste(plotname,plotlabel,"png",sep="."),family=mysambar$myfont,width=ngroups*mywidth2+200,height=800)}
+		if(export=="wmf"){win.metafile(paste(plotname,plotlabel,"wmf",sep="."),family=mysambar$myfont,width=ngroups*mywidth+2,height=8)}
+		}
+	par(oma=c(9.75,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=3)
+	yrange		<- c(min(indstemp$indscore,na.rm=TRUE),max(indstemp$indscore,na.rm=TRUE))
+	boxplot(indstemp$indscore~indstemp$groupfactor,las=2,border="grey50",outline=FALSE,ylim=yrange,col="grey90",xlab="",ylab="",cex.axis=2.5,pch=16)
+	for(i in c(1:length(mysambar$populations)))
+		{
+		mypop		<- mysambar$populations[i]
+		mycolour	<- mysambar$mycolours[i] 
+		indstemp2	<- indstemp[as.character(indstemp$pop)==mypop,]
+		stripchart(indscore~groupfactor,data=indstemp2,vertical=TRUE,method="jitter",pch=16,cex=3,xlab="",ylab="",col=mycolour,bg="bisque",add=TRUE)
+		}
+	if(!is.null(ylabel))
+		{	
+		mtext(side=2,ylabel,line=5.5,cex=3,outer=TRUE,las=0)
+		}
+	#mtext(side=1,"Population",line=2.75,cex=1.75)
+	if(!is.null(export)){dev.off()}
+	}
+
+boxplotf3<-function(shortpop=FALSE,export=NULL,plotname="genome_f3_boxplot")
+	{
+	f3df				<- dwd$f3df
+	zdf					<- dwd$f3zdf
+	mytrios				<- colnames(f3df)
+	source1				<- sapply(strsplit(mytrios, "_"), "[", 1)
+	source2				<- sapply(strsplit(mytrios, "_"), "[", 2)
+	target				<- sapply(strsplit(mytrios, "_"), "[", 3)
+	mylabels			<- paste("(",target,"; ",source1,",",source2,")",sep="")
+	#f3df[f3df>1]		<- NA
+	#f3df[f3df<-1]		<- NA 
+	f3df[zdf<2&zdf>-2]	<- NA
+	colnames(f3df)		<- mylabels
+	#
+	f3df$poptrios		<- NA
+	ndata				<- ncol(f3df)
+	#
+	myheight	<- ndata*0.5+2.5
+	myheight2	<- ndata*50+250
+	mywidth		<- ifelse(shortpop,10,15)
+	mywidth2	<- ifelse(shortpop,1000,1500)
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(shortpop,paste(plotname,"shortpop",sep="_"),plotname)
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),family=mysambar$myfont,width=mywidth,height=myheight)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),family=mysambar$myfont,width=mywidth,height=myheight)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),family=mysambar$myfont,width=mywidth2,height=myheight2)}
+		}
+	if(shortpop)
+		{
+		par(mar=c(5,14.5,2,4),cex.axis=2,cex.lab=3,cex.main=3)
+		}else{
+		par(mar=c(5,37,2,5),cex.axis=2,cex.lab=3,cex.main=3)
+		}
+	boxplot(x = as.list(as.data.frame(f3df)),las=1,horizontal=TRUE,outline=FALSE,ylim=c(-1,1))
+	abline(v=0)
+	abline(h=ndata)
+	mtext(side=1,line=3.5,"f3-statistic",cex=3)
+	text(y=ndata,x=-0.5,"Admixture",cex=2.5,pos=3)
+	text(y=ndata,x=0.5,"No admixture",cex=2.5,pos=3)
+	if(!is.null(export)){dev.off()}
+	}
+	
+histof3<-function(f3df=dwd$f3df,zdf=dwd$f3zdf,export=NULL,addlegend=TRUE,legendcex=2,legx=NULL,legy=NULL,yline=4,mybreaks=seq(-10,10,0.05),x_lim=c(-1,1),plotwidth=8,ymax=10,legendpos="topright",plotname="f3_histo",silent=TRUE,per_year=TRUE,mycolours=NULL,mylty=NULL,mycolours2=NULL)
+	{
+	if(ncol(zdf)!=ncol(f3df))
+		{
+		return(cat("ERROR: f3df and zdf do not correspond.",sep="\n"))
+		}
+	if(is.null(mycolours))
+		{
+		mycolours	<- c("blue","darkgreen","darkred","orange","darkorchid4","indianred1","deepskyblue","greenyellow","#654321","#009595","gray20","gray50","gray80","midnightblue","lavenderblush3","ivory2","aquamarine4","burlywood4")
+		}
+	if(is.null(mycolours2))
+		{
+		mycolours2	<- mycolours
+		}
+	ntrios		<- ncol(f3df)
+	if(is.null(mylty))
+		{
+		mylty		<- rep(1,ntrios)
+		}
+	mytrios				<- colnames(f3df)
+	source1				<- sapply(strsplit(mytrios, "_"), "[", 1)
+	source2				<- sapply(strsplit(mytrios, "_"), "[", 2)
+	target				<- sapply(strsplit(mytrios, "_"), "[", 3)
+	mylabels			<- paste("(",target,"; ",source1,",",source2,")",sep="")
+	#f3df[f3df>1]		<- NA
+	#f3df[f3df<-1]		<- NA 
+	f3df[zdf<2&zdf>-2]	<- NA
+	colnames(f3df)		<- mylabels
+	f3df[f3df< (-10)]	<- NA
+	f3df[f3df> 10]		<- NA
+	#
+	if(max(f3df,na.rm=TRUE)>max(mybreaks))
+		{
+		cat(max(f3df,na.rm=TRUE),sep="\n")
+		return(cat("ERROR: mybreaks do not span entire range.",sep="\n"))
+		}
+	#
+	if(!is.null(export))
+		{
+		if(!silent){cat(paste("plotwidth: ",plotwidth,sep=""),sep="\n")}
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=plotwidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=plotwidth,height=8)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=plotwidth*90,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=plotwidth,height=8)} 
+		}
+	# outline of plot:
+	par(mar=c(6,7,2,2),cex.axis=2,cex.lab=2.5)
+	hist(f3df[,1],breaks=mybreaks,xlim=x_lim,freq=FALSE,col="white",border=NA,ylim=c(0,ymax),xlab="",ylab="",main="",las=2)
+	mtext(side=1,"f3-statistic",line=4.5,cex=2.5)
+	mtext(side=2,"Proportion genomic windows",line=yline,cex=2.5)
+	#
+	for(k in c(1:ntrios))
+		{
+		cat(k,sep="\n")
+		myscore		<- f3df[,k]
+		mycol		<- as.character(mycolours[k])
+		mycol2		<- as.character(mycolours2[k])
+		mydensity	<- density(myscore,na.rm=TRUE)
+		lines(mydensity$x,mydensity$y,col=mycol,lwd=7,lty=mylty[k])
+		lines(mydensity$x,mydensity$y,col=mycol2,lwd=2,lty=mylty[k])
+		}
+	text(x=min(x_lim)/2,y=ymax*1.02,"Admixture",cex=2,col="grey40")
+	text(x=max(x_lim)/2,y=ymax*1.02,"No Admixture",cex=2,col="grey40")
+	abline(v=0,col="grey40")
+	# legend:
+	if(addlegend)
+		{
+		if(is.null(legx)|is.null(legy))
+			{
+			legend(legendpos,legend=mylabels,bty='n',fill=as.character(mycolours),cex=legendcex,border=as.character(mycolours2))
+			}else{
+			legend(x=legx,y=legy,legend=mylabels,bty='n',fill=as.character(mycolours),cex=legendcex,border=as.character(mycolours2))
+			}
+		}
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Histograms showing genome wide f3-scores has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+indscatter<-function(export=NULL,addlegend=TRUE,legendcex=2.5,plotname="Lroh_vs_Nroh",xscore="nroh",yscore="lroh",xlabel="Number of ROHs",ylabel="Total ROH length (Mb)",legendpos="topleft",yline=5.5,labels=FALSE,symbolsize=3.5,logx=FALSE,logy=FALSE)
+	{
+	ind				<- droplevels(dwd$ind[dwd$ind$filter,])
+	popinfo			<- droplevels(dwd$popinfo[dwd$popinfo$filter,])
+	mypops			<- as.character(popinfo$pop)
+	mycolours		<- as.character(popinfo$popcol)
+	#
+	if(!xscore%in%colnames(ind))
+		{
+		return(cat("ERROR: xscore not present in ind dataframe.",sep="\n"))
+		}
+	if(!yscore%in%colnames(ind))
+		{
+		return(cat("ERROR: yscore not present in ind dataframe.",sep="\n"))
+		}
+	inputdf			<- ind[,c(xscore,yscore)]
+	mydf			<<- inputdf
+	colnames(inputdf)<- c("xscore","yscore")
+	#
+	xmax			<- max(inputdf$xscore)
+	xmin			<- min(inputdf$xscore)
+	ymax			<- max(inputdf$yscore)
+	ymin			<- min(inputdf$yscore)
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(labels,paste(plotname,"indnames",sep="_"),plotname)
+		legendlabel	<- ifelse(addlegend,"withlegend","NOlegend")
+		if(export=="eps"){postscript(paste(plotname,legendlabel,"eps",sep="."),width=8,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,legendlabel,"pdf",sep="."),width=8,height=8)}
+		if(export=="png"){png(paste(plotname,legendlabel,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,legendlabel,"wmf",sep="."),width=8,height=8)} 
+		}
+	par(mar=c(5.5,8.5,2.5,0.5),cex.axis=2.5,cex.lab=3,cex.main=3)
+	mylog	<- ifelse(logx,ifelse(logy,"xy","x"),ifelse(logy,"y",""))
+	if(!labels)
+		{
+		plot(inputdf$xscore,inputdf$yscore,pch=16,log=mylog,col=as.character(ind$popcol),xlim=c(xmin,xmax),ylim=c(ymin,ymax),cex=symbolsize,xlab=xlabel,ylab="",las=1)
+		}else{
+		plot(inputdf$xscore,inputdf$yscore,pch=16,log=mylog,col="white",xlim=c(xmin,xmax),ylim=c(ymin,ymax),cex=3,xlab=xlabel,ylab="",las=1)
+		text(inputdf$xscore,inputdf$yscore,ind$name,col=as.character(ind$popcol),cex=1)
+		}
+	mtext(side=2,line=yline,ylabel,cex=3)
+	if(addlegend)
+		{
+		#legend(legendpos,legend=mypops,bty='n',fill=mycolours,cex=legendcex)
+		legend(legendpos,legend=dwd$poporder,bty='n',fill=dwd$colourorder,border=dwd$colourorder,cex=legendcex)
+		}
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Scatterplot has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+# currently only shows useful plot if He < 0.5
+chrombarplot<-function(inputdf1=dwd$chromhedf,inputdf2=dwd$frohdf,do_reorder=TRUE,plotlabel="Chrom_barplot",export=FALSE,silent=TRUE,win_size=10000)
+	{
+	loc		<- dwd$loc
+	scaffoldnames	<- unique(as.character(loc$contig))
+	nscaffolds		<- length(scaffoldnames)
+	chromnsitesdf	<- dwd$chromnsitesdf
+	#
+	ind		<- dwd$ind
+	if(do_reorder)
+		{
+		poporder		<- order(ind$pop)
+		ind		<- ind[poporder,]
+		inputdf1		<- inputdf1[,poporder]
+		if(!is.null(inputdf2))
+			{
+			inputdf2	<- inputdf2[,poporder]
+			}
+		}
+	mycolours		<- as.character(ind$popcol)
+	samplenames		<- unique(as.character(ind$name))
+	nsamples		<- length(samplenames)
+	#
+	# weighted mean (should be roughly the same as ind$regionhe)
+	meanscores1		<- as.vector(round(apply(as.matrix(inputdf1*chromnsitesdf),2,mean)/colMeans(as.matrix(chromnsitesdf)),3))
+	meanscores2		<- as.vector(round(apply(as.matrix(inputdf1*chromnsitesdf),2,mean)/colMeans(as.matrix(chromnsitesdf)),3))
+	# unweighted mean (can deviate strongly when including small contigs)
+	# meanscores1		<- as.vector(round(apply(as.matrix(inputdf1),2,mean),3))
+	# meanscores2		<- as.vector(round(apply(as.matrix(inputdf2),2,mean),3))
+	#
+	if(export)
+		{
+		plotname	<- paste(plotlabel,win_size,"allscaffolds.pdf",sep=".")
+		pdf(plotname,width=10,height=nscaffolds*0.3+5)
+		}
+	par(cex.lab=1.75,cex.axis=1.25,mar=c(12,6,4,11))
+	#
+	if(!silent){cat("Creating plot...",sep="\n")}
+	barplot(as.vector(inputdf1[,1]),col="white",border=NA,ylim=c(0,nsamples/2),pch=16,yaxt='n',ylab="",xlab="",names.arg=rownames(inputdf1),las=2,cex.lab=0.5)
+	for(k in c(1:nsamples))
+		{
+		samplename				<- samplenames[k]
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(samplename,sep="\n")}
+		indscores1				<- inputdf1[,k]
+		indscores2				<- inputdf2[,k]
+		xx<-barplot(indscores1,col=mycolours[k],offset=(k-1)*0.5,border=NA,add=TRUE,xaxt='n',yaxt='n')
+		abline(h=0.15+(k-1)*0.5,lty=3)
+		text(x=xx,y=indscores1+(k-1)*0.5,label=indscores2,col="black",cex=0.25)
+		}
+	axis(side=4,at=seq(0.15,nsamples*0.5-0.35,0.5),label=samplenames,cex=1,las=1)
+	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
+	mtext("Heterozygosity (%)",side=2,line=4,cex=2)
+	axis(side=2,at=seq(0.15,nsamples*0.5-0.35,0.5),label=meanscores1,cex=0.25,las=1)
+	if(export)
+		{
+		dev.off()
+		cat("Plot has been exported to directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+plotcorr<-function(plotlabel="LD",do_shuffle=FALSE,genedf=NULL,export=FALSE,silent=TRUE,win_size=10000,maxmiss=0.6,minsnps=20,myregion=NULL)
+	{
+	loc		<- dwd$loc
+	popinfo			<- dwd$popinfo
+	#
+	scaffoldnames	<- unique(as.character(loc$contig))
+	nscaffolds		<- length(scaffoldnames)
+	graphics.off()
+	if(export)
+		{
+		if(do_shuffle)
+			{
+			plotname	<- paste(plotlabel,"correlation_vs_shuffeld",win_size,"pdf",sep=".")
+			pdf(plotname,width=16,height=8)
+			}else{
+			plotname	<- paste(plotlabel,"correlation",win_size,"pdf",sep=".")
+			pdf(plotname,width=8,height=8)
+			}
+		}
+	if(do_shuffle)
+		{
+		par(mfrow=c(1,2),cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,2))
+		}else{
+		par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,2))
+		}
+	#
+	windowmiss				<- loc$miss
+	windownpoly				<- loc$nrsnps
+	windowmeandist			<- loc$dist_meta
+	winfilter				<- windowmiss<=maxmiss
+	npolyfilter				<- windownpoly>=minsnps
+	distfilter				<- windowmeandist>480&windowmeandist<520
+	genomescores1			<- loc$LD_meta2
+	genomescores2			<- loc$prop_S*10
+	genomescores1[!winfilter]<- NA
+	genomescores2[!winfilter]<- NA 
+	genomescores1[!npolyfilter]<- NA
+	genomescores2[!npolyfilter]<- NA
+	genomescores1[!distfilter]<- NA
+	genomescores2[!distfilter]<- NA
+	#
+	if(!silent){cat("Creating plot outline...",sep="\n")}
+	windowmid				<- loc$mid
+	myxmax					<- max(loc$mid,na.rm=TRUE)
+	myxmin					<- min(loc$mid,na.rm=TRUE)
+	if(!is.null(myregion))
+		{
+		regionfilter		<- windowmid>=myregion[1]&windowmid<=myregion[2]
+		}else{
+		regionfilter		<- rep(TRUE,length(genomescores1))
+		}
+	#
+	#for(k in c(1:nscaffolds))
+	for(k in c(1:1))
+		{
+		scaffoldname			<- scaffoldnames[k]
+		#scaffoldfilter			<- as.character(loc$contig)==scaffoldname
+		scaffoldfilter			<- rep(TRUE,nrow(loc))
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(scaffoldname,sep="\n")}
+		scafscores1				<- genomescores1[scaffoldfilter&regionfilter]
+		scafscores2				<- genomescores2[scaffoldfilter&regionfilter]
+		plot(scafscores1,scafscores2,xlab="LD",ylab="prop_S",pch=16,cex=0.5,xlim=c(0,1),ylim=c(0,0.6))
+		mylm					<- lm(scafscores2~scafscores1)
+		abline(mylm)
+		mypvalue				<- round(summary(mylm)$coefficient[2,4],4)
+		legend("topright",paste("p-value: ",mypvalue),cex=1.5,bty='n') 
+		#
+		if(do_shuffle)
+			{
+			mtext(side=3,"True correlation",cex=2,line=0.5)
+			shufscores1				<- sample(scafscores1,length(scafscores1),replace=FALSE)
+			shufscores2				<- sample(scafscores2,length(scafscores2),replace=FALSE)
+			plot(shufscores1,shufscores2,xlab="LD",ylab="prop_S",pch=16,cex=0.5,xlim=c(0,1),ylim=c(0,0.6))
+			mtext(side=3,"Shuffeld correlation",cex=2,line=0.5)
+			mylm					<- lm(shufscores2~shufscores1)
+			abline(mylm)
+			mypvalue				<- round(summary(mylm)$coefficient[2,4],4)
+			legend("topright",paste("p-value: ",mypvalue),cex=1.5,bty='n') 
+			}
+		}
+	if(export)
+		{
+		dev.off()
+		cat("Plot has been exported to directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	#par(mfrow=c(1,2))
+	#hist(scafscores1,breaks=100)
+	#hist(scafscores2,breaks=100)
+	}
+
+# depends on plotscaffold
+runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE)
+	{
+	ind				<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])	
+	loc				<- dwd$loc
+	myscaffolds		<- unique(loc$contig)
+	nscaffolds		<- length(myscaffolds)
+	#
+	if(is.null(poplist))
+		{
+		poplist			<- list(allpops=as.character(unique(ind$pop)))
+		}
+	#
+	cat("Creating plots...",sep="\n")
+	for(popsetnr in c(1:length(poplist)))
+		{
+		pop_vector				<- poplist[[popsetnr]] 
+		for(scafnr in c(1:nscaffolds))
+			{
+			myscaf	<- myscaffolds[scafnr]
+			if(!be_silent){cat(myscaf,sep="\n")}
+			indscaffold(inputdf1=input_df1,inputdf2=input_df2,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4)
+			}
+		}
+	if(do_export)
+		{
+		cat("Plots have been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE)
+	{
+	loc				<- dwd$loc
+	if(!scaffoldname%in%as.character(loc$contig))
+		{
+		return(cat("ERROR: scaffoldname not present in dwd$loc$contig column.",sep="\n"))
+		}
+	ind				<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])
+	missdf			<- dwd$missdf[,dwd$ind$filter,drop=FALSE]
+	frohvec			<- as.vector(dwd$frohdf[rownames(dwd$frohdf)==scaffoldname,dwd$ind$filter])
+	hevec			<- as.vector(dwd$chromhedf[rownames(dwd$frohdf)==scaffoldname,dwd$ind$filter])
+	dxyvec			<- as.vector(dwd$chromdxydf[rownames(dwd$chromdxydf)==scaffoldname,dwd$ind$filter])
+	missvec			<- as.vector(dwd$chrommissdf[rownames(dwd$chrommissdf)==scaffoldname,dwd$ind$filter])
+	contigrlelist	<- dwd$rlelist[[which(names(dwd$rlelist)==scaffoldname)]]
+	contigrlelist	<- contigrlelist[dwd$ind$filter]
+	#
+	# reorder based on population label:
+	if(do_reorder)
+		{
+		poporder		<- order(ind$pop)
+		ind				<- ind[poporder,]
+		missdf			<- missdf[,poporder,drop=FALSE]
+		frohvec			<- frohvec[poporder]
+		hevec			<- hevec[poporder]
+		dxyvec			<- dxyvec[poporder]
+		missvec			<- missvec[poporder]
+		#
+		contigrlelist	<- contigrlelist[poporder]
+		}
+	#	
+	if(!is.null(popvector))
+		{
+		for(pop in popvector)
+			{
+			if(!pop%in%ind$pop){cat(paste("WARNING: population ",pop," not present in popinfo2$pop column.",sep=""),sep="\n")}
+			}
+		ind2			<- ind[as.character(ind$pop)%in%popvector,]
+		frohvec			<- frohvec[as.character(ind$pop)%in%popvector]
+		dxyvec			<- dxyvec[as.character(ind$pop)%in%popvector]
+		contigrlelist	<- contigrlelist[as.character(ind$pop)%in%popvector]
+		}else{
+		ind2		<- ind
+		}
+	indnames		<- as.character(ind2$name)
+	ninds			<- nrow(ind2)
+	if(export)
+		{
+		popvec		<- paste(popvector,collapse="_")
+		symboltype	<- ifelse(dolines,ifelse(!is.null(inputdf2),paste(plotlabel,"linechart2",sep="_"),paste(plotlabel,"linechart",sep="_")),ifelse(!is.null(inputdf2),paste(plotlabel,"scatter2",sep="_"),paste(plotlabel,"scatter",sep="_")))
+		if(addpopname)
+			{
+			plotname	<- paste(symboltype,win_size,popvec,scaffoldname,"pdf",sep=".")
+			}else{
+			plotname	<- paste(symboltype,win_size,scaffoldname,"pdf",sep=".")
+			}
+		pdf(plotname,width=14,height=ninds*heightfactor1+heightfactor2)
+		}
+	par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,9))
+	windowmid				<- loc$mid[loc$contig==scaffoldname]
+	missdf					<- missdf[loc$contig==scaffoldname,,drop=FALSE]
+	scoredf					<- inputdf1[loc$contig==scaffoldname,,drop=FALSE]
+	if(!is.null(inputdf2))
+		{
+		scoredf2			<- inputdf2[loc$contig==scaffoldname,,drop=FALSE]
+		}
+	if(!silent){cat("Creating plot outline...",sep="\n")}
+	if(addyaxis)
+		{
+		plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,ylab="",xlab="",las=1)
+		mtext("Heterozygosity (%)",side=2,line=4,cex=2)
+		}else{
+		plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,yaxt='n',ylab="",xlab="")
+		}
+	for(k in c(1:ninds))
+		{
+		indname					<- indnames[k]
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(indname,sep="\n")}
+		indmiss					<- missdf[,indname]
+		winfilter				<- indmiss<=maxmiss
+		#
+		indscores				<- scoredf[,indname]
+		indscores[!winfilter]	<- NA
+		if(!is.null(inputdf2))
+			{
+			indscores2				<- scoredf2[,indname]
+			indscores2[!winfilter]	<- NA
+			}
+		#
+		if(addroh)
+			{
+			rleout			<- contigrlelist[[k]]
+			RLEindices		<- which(rleout$values==TRUE&rleout$lengths>=min_rle_length)
+			nroh			<- length(RLEindices)
+			if(nroh>0)
+				{
+				rleend		<- cumsum(rleout$lengths)
+				rlestart	<- c(0,rleend[1:(length(rleend)-1)])
+				rohend		<- rleend[RLEindices]*(nwindows*win_size)/1000000
+				rohstart	<- rlestart[RLEindices]*(nwindows*win_size)/1000000
+				for(i in c(1:nroh))
+					{
+					rect(xleft=rohstart[i],ybottom=k-1,xright=rohend[i],ytop=k-0.2,col="grey95",border=NA)
+					}
+				}
+			}
+		if(addzero)
+			{
+			abline(h=k-1,col="grey90",lty=2)
+			}
+		if(dolines)
+			{
+			if(!is.null(inputdf2))
+				{
+				lines(windowmid,indscores2+(k-1),col="grey70",lwd=linewidth)
+				}
+			lines(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),lwd=linewidth)
+			}else{
+			points(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
+			}
+		}
+	if(addside4)
+		{
+		axis(side=4,at=seq(0.25,ninds-0.75,1),label=indnames,cex=1,las=1)
+		}
+	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
+	mtext(paste("scaffold ",scaffoldname,sep=""),side=3,line=2,cex=1.75)
+	if(!addyaxis)
+		{
+		if(addroh)
+			{
+			axis(side=2,at=seq(0.25,ninds-0.75,1),label=frohvec,cex=0.5,las=1)
+			mtext("F_roh",side=2,line=4,cex=2)
+			}else{
+			if(addhe)
+				{
+				axis(side=2,at=seq(0.25,ninds-0.75,1),label=round(hevec,3),cex=0.5,las=1)
+				mtext("Heterozygosity (%)",side=2,line=4,cex=2)
+				}
+			if(adddxy)
+				{
+				axis(side=2,at=seq(0.25,ninds-0.75,1),label=round(dxyvec,2),cex=0.5,las=1)
+				mtext("D_xy",side=2,line=4,cex=2)
+				}
+			if(addmiss)
+				{
+				axis(side=2,at=seq(0.25,ninds-0.75,1),label=round(missvec,2),cex=0.5,las=1)
+				mtext("Proportion missing data",side=2,line=4,cex=2)
+				}
+			}
+		}
+	mtext("Position (Mb)",side=1,line=2.75,cex=2)
+	if(export)
+		{
+		dev.off()
+		if(!silent){cat("Plot has been exported to directory:",sep="\n")}
+		if(!silent){cat(getwd(),sep="\n")}
+		}
+	}
+
+# depends on plotscaffold
+runpopscaffold<-function(do_export=FALSE,input_df1=dwd$pidf,input_df2=NULL,plot_label="Pi",be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,gene_df=NULL)
+	{
+	loc		<- dwd$loc
+	myscaffolds		<- unique(loc$contig)
+	nscaffolds		<- length(myscaffolds)
+	#
+	cat("Creating plots...",sep="\n")
+	for(scafnr in c(1:nscaffolds))
+		{
+		myscaf	<- myscaffolds[scafnr]
+		if(!be_silent){cat(myscaf,sep="\n")}
+		popscaffold(inputdf1=input_df1,inputdf2=input_df2,genedf=gene_df,plotlabel=plot_label,scaffoldname=myscaf,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss)
+		}
+	if(do_export)
+		{
+		cat("Plots have been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+popscaffold<-function(inputdf1=dwd$pidf,inputdf2=NULL,genedf=NULL,plotlabel="Pi",addmiss=FALSE,scaffoldname="HiC_scaffold_1",export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6)
+	{
+	loc		<- dwd$loc
+	popinfo			<- dwd$popinfo
+	#
+	popnames		<- as.character(popinfo$pop)
+	npops			<- length(popnames)
+	if(export)
+		{
+		symboltype	<- ifelse(dolines,"linechart","scatter")
+		plotname	<- paste(plotlabel,symboltype,win_size,scaffoldname,"pdf",sep=".")
+		pdf(plotname,width=14,height=npops*0.25+5)
+		}
+	par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,9))
+	windowmiss				<- loc$miss[loc$contig==scaffoldname] 
+	windowmid				<- loc$mid[loc$contig==scaffoldname]
+	scoredf					<- inputdf1[loc$contig==scaffoldname,]
+	if(!is.null(inputdf2))
+		{
+		scoredf2			<- inputdf2[loc$contig==scaffoldname,]
+		}
+	if(!is.null(genedf))
+		{
+		genedf		<- genedf[genedf$contig==scaffoldname,]
+		}
+	meanpopscores	<- vector()
+	if(!silent){cat("Creating plot outline...",sep="\n")}
+	plot(windowmid,scoredf[,1],col="white",ylim=c(0,npops),pch=16,yaxt='n',ylab="",xlab="")
+	for(k in c(1:npops))
+		{
+		popname					<- popnames[k]
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(popname,sep="\n")}
+		winfilter				<- windowmiss<=maxmiss
+		#
+		popscores				<- scoredf[,popname]
+		popscores[!winfilter]	<- NA
+		if(!is.null(genedf))
+			{
+			rect(xleft=genedf$startpos,ybottom=k-1,xright=genedf$endpos,ytop=k,col="grey90",border=NA)
+			}
+		if(!is.null(inputdf2))
+			{
+			popscores2				<- scoredf2[,popname]
+			popscores2[!winfilter]	<- NA
+			}
+		if(dolines)
+			{
+			if(!is.null(inputdf2))
+				{
+				lines(windowmid,popscores2+(k-1),col="grey70")
+				}
+			lines(windowmid,popscores+(k-1),col=as.character(popinfo$popcol[k]))
+			}else{
+			points(windowmid,popscores+(k-1),col=as.character(popinfo$popcol[k]),pch=16,cex=0.5)
+			}
+		meanpopscores[k]	<- round(mean(popscores[is.finite(popscores)],na.rm=TRUE),2)
+		}
+	axis(side=4,at=seq(0.25,npops-0.75,1),label=popnames,cex=1,las=1)
+	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
+	mtext(paste("scaffold ",scaffoldname,sep=""),side=3,line=2,cex=1.75)
+	mtext("Position (Mb)",side=1,line=2.75,cex=2)
+	mtext("Pi",side=2,line=4,cex=2)
+	axis(side=2,at=seq(0.3,npops-0.7,1),label=meanpopscores,cex=0.25,las=1)
+	if(export)
+		{
+		dev.off()
+		if(!silent){cat("Plot has been exported to directory:",sep="\n")}
+		if(!silent){cat(getwd(),sep="\n")}
+		}
+	}
+
+# depends on poppairscaffold
+runpoppairscaffold<-function(do_export=FALSE,input_df1=dwd$fstdf,input_df2=NULL,input_df3=NULL,plot_label="Fst",combi_names=NULL,add_zero=FALSE,y_max=1,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,gene_df=NULL,label_cex=0.5,label_pos=0.3,height_factor=0.4,symbol_cex=0.5)
+	{
+	loc		<- dwd$loc
+	myscaffolds		<- unique(loc$contig)
+	nscaffolds		<- length(myscaffolds)
+	#
+	cat("Creating plots...",sep="\n")
+	for(scafnr in c(1:nscaffolds))
+		{
+		myscaf	<- myscaffolds[scafnr]
+		if(!be_silent){cat(myscaf,sep="\n")}
+		poppairscaffold(inputdf1=input_df1,inputdf2=input_df2,inputdf3=input_df3,genedf=gene_df,plotlabel=plot_label,combinames=combi_names,addzero=add_zero,ymax=y_max,scaffoldname=myscaf,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,labelcex=label_cex,labelpos=label_pos,heightfactor=height_factor,symbolcex=symbol_cex)
+		}
+	if(do_export)
+		{
+		cat("Plots have been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	}
+
+poppairscaffold<-function(inputdf1=dwd$fstdf,inputdf2=NULL,inputdf3=NULL,plotlabel="Dxy",combinames=NULL,addzero=FALSE,ymax=1,addmiss=FALSE,scaffoldname="HiC_scaffold_1",export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,genedf=NULL,labelcex=0.5,labelpos=0.3,heightfactor=0.4,symbolcex=0.25)
+	{
+	loc		<- dwd$loc
+	if(is.null(combinames))
+		{
+		popinfo			<- dwd$popinfo
+		combitable		<- dwd$combitable
+		combitable2		<- dwd$combitable2
+		combicoltable	<- dwd$combicoltable
+		combicolvector	<- combicoltable[3,]
+		combinames		<- paste(combitable[1,],combitable[2,],sep="_")
+		combinames2		<- paste(combitable[1,],combitable[2,],sep="\n")
+		}else{
+		combinames2		<- gsub("_","\n",combinames)
+		combicolvector	<- c("blue","darkgreen","darkred","orange","darkorchid4","#654321","deepskyblue","greenyellow","indianred1","#009595","gray20","gray50","gray80","midnightblue","lavenderblush3","ivory2") 
+		}
+	npairs			<- length(combinames)
+	#
+	if(!is.null(genedf))
+		{
+		genedf		<- genedf[genedf$contig==scaffoldname,]
+		}
+	if(export)
+		{
+		symboltype	<- ifelse(dolines,"linechart","scatter")
+		plotname	<- paste(plotlabel,symboltype,win_size,scaffoldname,"pdf",sep=".")
+		pdf(plotname,width=14,height=npairs*heightfactor+5)
+		}
+	par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,9))
+	windowmiss				<- loc$miss[loc$contig==scaffoldname] 
+	windowmid				<- loc$mid[loc$contig==scaffoldname]
+	scoredf					<- inputdf1[loc$contig==scaffoldname,,drop=FALSE]
+	if(!is.null(inputdf2))
+		{
+		scoredf2			<- inputdf2[loc$contig==scaffoldname,,drop=FALSE]
+		}
+	if(!is.null(inputdf3))
+		{
+		scoredf3			<- inputdf3[loc$contig==scaffoldname,,drop=FALSE]
+		}
+	meanpoppairscores		<- vector()
+	if(!silent){cat("Creating plot outline...",sep="\n")}
+	plot(windowmid,scoredf[,1],col="white",ylim=c(0,npairs*ymax),pch=16,yaxt='n',ylab="",xlab="")
+	for(k in c(1:npairs))
+		{
+		poppairname					<- combinames[k]
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat(poppairname,sep="\n")}
+		winfilter					<- windowmiss<=maxmiss
+		#
+		popscores					<- scoredf[,poppairname]
+		popscores[!winfilter]		<- NA
+		if(!is.null(inputdf2))
+			{
+			popscores2				<- scoredf2[,poppairname]
+			popscores2[!winfilter]	<- NA
+			}
+		if(!is.null(inputdf2))
+			{
+			popscores3				<- scoredf3[,poppairname]
+			popscores3[!winfilter]	<- NA
+			}
+		if(!is.null(genedf))
+			{
+			rect(xleft=genedf$startpos,ybottom=ymax*(k-1),xright=genedf$endpos,ytop=ymax*k,col="grey90",border=NA)
+			}
+		if(addzero)
+			{
+			abline(h=k-1,col="grey90",lty=2)
+			}
+		if(dolines)
+			{
+			if(!is.null(inputdf2))
+				{
+				lines(windowmid,popscores2+ymax*(k-1),col="grey80")
+				}
+			if(!is.null(inputdf3))
+				{
+				lines(windowmid,popscores3+ymax*(k-1),col="grey20")
+				}
+			lines(windowmid,popscores+ymax*(k-1),col=as.character(combicolvector[k]),lwd=1.5)
+			}else{
+			if(!is.null(inputdf2))
+				{
+				points(windowmid,popscores2+ymax*(k-1),col="grey80",pch=16,cex=0.25)
+				}
+			if(!is.null(inputdf3))
+				{
+				points(windowmid,popscores3+ymax*(k-1),col="grey20",pch=16,cex=0.25)
+				}
+			if(addzero)
+				{
+				mycols	<- ifelse(popscores<0,as.character(combicolvector[k]),"grey60")
+				}else{
+				mycols	<- as.character(combicolvector[k])
+				}
+			points(windowmid,popscores+ymax*(k-1),col=mycols,pch=16,cex=symbolcex)
+			}
+		if(plotlabel=="ZFst")
+			{
+			abline(h=ymax*(k-1)+3.5,lty=2,col="grey70")
+			}
+		meanpoppairscores[k]	<- round(mean(popscores[is.finite(popscores)],na.rm=TRUE),2)
+		}
+	axis(side=4,at=seq(labelpos*ymax,npairs*ymax-(1-labelpos)*ymax,ymax),label=combinames2,cex=labelcex,las=1)
+	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
+	mtext(paste("scaffold ",scaffoldname,sep=""),side=3,line=2,cex=1.75)
+	mtext("Position (Mb)",side=1,line=2.75,cex=2)
+	mtext(plotlabel,side=2,line=4,cex=2)
+	if(plotlabel=="Dxy"|plotlabel=="Fst"|plotlabel=="f3")
+		{
+		axis(side=2,at=seq(0.3*ymax,npairs*ymax-0.7*ymax,ymax),label=meanpoppairscores,cex=0.25,las=1)
+		}
+	if(export)
+		{
+		dev.off()
+		if(!silent){cat("Plot has been exported to directory:",sep="\n")}
+		if(!silent){cat(getwd(),sep="\n")}
+		}
+	}
+
+# gene flow?
+gf<-function(binsize=0.025,ingroup1="ABC",ingroup2="Canada",outgroup="polar",plotfst=FALSE,makeglobal=FALSE)
+	{
+	fstdf		<- dwd$fstdf
+	#
+	fstpair1	<- c(ingroup1,outgroup)
+	fstpair1	<- fstpair1[order(fstpair1)]
+	fstpair2	<- c(ingroup2,outgroup)
+	fstpair2	<- fstpair2[order(fstpair2)]
+	#
+	fst1		<- fstdf[,paste(fstpair1[1],fstpair1[2],sep="_"),drop=TRUE]
+	fst2		<- fstdf[,paste(fstpair2[1],fstpair2[2],sep="_"),drop=TRUE]
+	dstat		<- (fst1-fst2)/(fst1+fst2)
+	winfilter	<- is.finite(dstat)&!is.na(dstat)
+	dstat		<- dstat[winfilter]
+	dstatmean	<- mean(dstat)
+	nBAB		<- length(dstat[dstat<0])
+	nABB		<- length(dstat[dstat>0])		
+	if(makeglobal)
+		{
+		fst1	<<- fst1
+		fst2	<<- fst2
+		dstat	<<- dstat	
+		}
+	# plot:
+	mybreaks 	<- seq(-1-binsize,1+binsize,binsize)
+	hist(dstat,breaks=mybreaks,xlim=c(-1,1),main="",freq=FALSE,las=1)
+	abline(v=0,lwd=2)
+	abline(v=dstatmean,lty=2,lwd=2)
+	mtext(ingroup1,side=3,at=-0.5,line=-1,cex=1.5)
+	mtext(ingroup2,side=3,at=0.5,line=-1,cex=1.5)
+	mtext(nBAB,side=3,at=-0.5,line=-2.25,cex=1.5)
+	mtext(nABB,side=3,at=0.5,line=-2.25,cex=1.5)
+	mtext(outgroup,side=3,line=0.5,cex=2)
+	#
+	if(plotfst)
+		{
+		par(mfrow=c(2,1))
+		mycex		<- ifelse(dstat<0,0.25,1)
+		mycol		<- ifelse(dstat<0,"black","red")
+		plot(fst1[winfilter],pch=16,cex=mycex,col=mycol,ylim=c(0,1),ylab=fstpair1)
+		mycex		<- ifelse(dstat>0,1,0.25)
+		mycol		<- ifelse(dstat>0,"red","black")
+		plot(fst2[winfilter],pch=16,cex=mycex,col=mycol,ylim=c(0,1),ylab=fstpair2)
+		}
+	}
+
+gf2<-function(ingroup1="ABC",ingroup2="Canada",introgressor="WestEurope",outgroup="polar",plotfst=FALSE)
+	{
+	ndiffdf		<- dwd$ndiffdf
+	#
+	pair1		<- c(ingroup1,introgressor)
+	pair1		<- pair1[order(pair1)]
+	pair2		<- c(ingroup2,introgressor)
+	pair2		<- pair2[order(pair2)]
+	pair3		<- c(ingroup1,outgroup)
+	pair3		<- pair3[order(pair3)]
+	pair4		<- c(ingroup2,outgroup)
+	pair4		<- pair4[order(pair4)]
+	#
+	pairname1	<- paste(pair1,collapse="_")
+	pairname2	<- paste(pair2,collapse="_")
+	pairname3	<- paste(pair3,collapse="_")
+	pairname4	<- paste(pair4,collapse="_")
+	pairnames	<- c(pairname1,pairname2,pairname3,pairname4)
+	#
+	ndiff1		<- ndiffdf[,paste(pair1[1],pair1[2],sep="_"),drop=TRUE]
+	ndiff2		<- ndiffdf[,paste(pair2[1],pair2[2],sep="_"),drop=TRUE]
+	ndiff3		<- ndiffdf[,paste(pair3[1],pair3[2],sep="_"),drop=TRUE]
+	ndiff4		<- ndiffdf[,paste(pair4[1],pair4[2],sep="_"),drop=TRUE]
+	diffmat		<- cbind(ndiff1,ndiff2,ndiff3,ndiff4)
+	colnames(diffmat)	<- pairnames
+	winfilter 	<- complete.cases(diffmat)
+	#diffmat		<- diffmat[winfilter,]
+	diffmat[!winfilter,] <- c(10,10,10,10)
+	diffmat2	<- t(diffmat)
+	#
+	plist		<- lapply(1:ncol(diffmat2),function(i){matrix(diffmat2[c(1,2,3,4),i],2,2,byrow=TRUE)})
+	rfisherp	<- unlist(lapply(plist,function(plist){fisher.test(plist)$p.value}))
+	mylogp		<<- -log10(rfisherp)
+	mybonf		<- -log10(0.05/nrow(diffmat))
+	mybool		<- mylogp>=mybonf
+	plot(mylogp,pch=16,cex=0.75)
+	abline(h=mybonf,lty=2)
+	outmat		<<- diffmat[mylogp>10,]
+	}
+	
+he_vs_dxy<-function()
+	{
+	hedf			<- dwd$hedf
+	dxydf			<- dwd$dxydf
+	plot(hedf$CentralRussia2,dxydf$polar10,pch=16,cex=0.5,ylim=c(0,1.5),xlim=c(0,1.5))
+	}
