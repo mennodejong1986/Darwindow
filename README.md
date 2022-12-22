@@ -1,4 +1,4 @@
-#Darwindow
+# Darwindow
 
 Darwindow is a small tool, consisting of a Unix and a R script, to calculate and plot population-genetic estimates on a sliding-window basis. 
 
