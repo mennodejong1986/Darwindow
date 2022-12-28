@@ -1,8 +1,8 @@
 # DARWINDOW
 # This R script contains functions to plot the output of sliding window analyses executed at Unix command line by VCF_windowhe_multisamples.sh script.
 # All results will be stored in a list object called 'dwd' (shorthand notation of darwindow).
-# Sample information is stored in dataframe 'ind'.
-# Window information is stored in dataframe 'loc'.
+# Sample information is stored in dataframe 'dwd$ind'.
+# Window information is stored in dataframe 'dwd$loc'.
 
 # source("D:/PhD/General/Rawdata2snps/VCF_darwindow.plotinR.txt")
 
