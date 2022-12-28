@@ -8,7 +8,7 @@ The average genome-wide heterozygosity estimates produced by Darwindow are near-
 
 In order to run Darwindow, follow the instructions in the top section of the VCF_darwindow.sh script.
 This will generate intermediate file(s) containing window-based counts (such as number of homozygous and number of heterozygous sites per individual per window).
-These window-based counts can subsequently be importedn and analysed in R, using the script 'VCF_darwindow.plotinR.txt'.
+These window-based counts can subsequently be imported and analysed in R, using the script 'VCF_darwindow.plotinR.txt'.
 The top section of this R script contain an example run with commands.
 
 
