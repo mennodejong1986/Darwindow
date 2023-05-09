@@ -44,6 +44,7 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 
 *miss_max	  <- 0.8*         exclude windows with more more missing data 
 
+
 **Import data:**
 
 *mywd		<- "C:/path/to/directory/"*
@@ -75,13 +76,16 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 *indboxplot(export="pdf",inputdf=dwd$hedf,plotname="Genomewide_windowHe",ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=miss_max,ymax=0.95,mywidth=0.5)*
 
 **Detect runs of homozygosity:**
-Either use a universal threshold heterozygosity value for all individuals:
+
+Either specify a universal threshold heterozygosity value for all individuals:
 
 *hethres_vec	<- 0.05*	
 
 Or alternatively specify threshold per individual:
 
 *hethres_vec	<- ifelse(dwd$ind$pop=="polar",0.001,0.05)*
+
+Detect ROHs based on the specified threshold:
 
 *findroh(silent=TRUE,hethreshold=hethres_vec,min_rle_length=1,windowsize=window_size,nwindows=nr_windows)*
 
