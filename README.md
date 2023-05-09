@@ -63,7 +63,7 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 
 *calcwindowhe(maxmiss=miss_max)*
 
-*calcregionhe(maxmiss=miss_max,nwindows=nr_windows)
+*calcregionhe(maxmiss=miss_max,nwindows=nr_windows)*
 
 **Plot heterozygosity:**
 
