@@ -21,7 +21,7 @@ The columns 'nmiss_1', 'nsites_1', 'nhet_1' and 'nhomo_1' give for each window t
 
 ### Instructions for subsequently running 'VCF_windowhe_plotinR.txt' script in R
 
-This file with count data can be further analysed and plotted in R using the script 'VCF_windowhe_plotinR.txt'
+The main output file can be further analysed and plotted in R using the script 'VCF_windowhe_plotinR.txt'.
 To do so for the example dataset (135 bears, 3 chromosomes), execute in R the following commands:
 
 **First load all required functions:**
@@ -38,11 +38,17 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 
 **Next define the settings:**
 
-*window_size	<- 20000*		  window size in bp
+Window size in bp:
 
-*nr_windows	<- 10*			    minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 10, and window size is 20000, then reported ROHs are minimum 200Kb)
+*window_size	<- 20000*		  
 
-*miss_max	  <- 0.8*         exclude windows with more more missing data 
+Minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 10, and window size is 20000, then reported ROHs are minimum 200Kb):
+
+*nr_windows	<- 10*			    
+
+Maximum amount of missing data per window:
+
+*miss_max	  <- 0.8*         
 
 
 **Import data:**
