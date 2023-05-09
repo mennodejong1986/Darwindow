@@ -103,11 +103,11 @@ Once you defined the threshold, run the following functions to detect ROHs:
 
 **Plot runs of homozygosity:**
 
-*runindscaffold(height_unit=1,do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=0.9,n_windows=nr_windows,min_rle_len=1,window_size=window_size,line_width=0.1)*
+*runindscaffold(height_unit=1,do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=miss_max,n_windows=nr_windows,min_rle_len=1,window_size=window_size,line_width=0.1)*
 
 Visually examine the output line charts. Do regions marked as run of homozygosity (grey areas) indeed have low heterozygosity?
 If not, try different settings (i.e.: use different values for he_thres_vec and/or nr_windows).
-If yes, then you can proceed and create the plots with ROH summary statistics.
+If yes, then you can proceed and create the final plots with ROH summary statistics.
 
 **Plot ROH summary statistics:**
 
