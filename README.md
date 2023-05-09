@@ -7,16 +7,19 @@ Darwindow is particularly useful to perform run of homozygosity (ROH) analyses. 
 The average genome-wide heterozygosity estimates produced by Darwindow are near-identical to the estimates obtained with 'bcftools stats -s -', assuming that indels have been removed from the input vcf-file using the command 'zgrep -v "INDEL" data.vcf.gz | gzip > data.noindels.vcf.gz' (this step is included in Darwindow pipeline).
 
 
-### Instructions
+### Instructions for running 'VCF_darwindow.sh' script on Unix command line
 
 In order to run Darwindow in the Unix command line, follow the instructions in the top section of the VCF_darwindow.sh script.
 This will generate file(s) containing window-based counts. 
 
 The main output file will start with the prefix 'mywindowhe' and contains the columns:
 'contig startbp endbp totalbp nmiss_1 nsites_1 nhet_1 nhomo_1 nmiss_2 nsites_2 nhet_2 nhomo_2 nmiss_3 nsites_3 nhet_3 nhomo_3 etc'
+
 The columns 'nmiss_1', 'nsites_1', 'nhet_1' and 'nhomo_1' give for each window the number of missing sites, the number of non-missing sites, the number of heterozygous sites and the number of alternative homozygous sites observed for individual 1 (first individual in the vcf-file). The columns 'nmiss_2', 'nsites_2', 'nhet_2' and 'nhomo_2 give these counts for individual 2, and so on. 
 
-This count data can be further analysed and plotted in R using the script 'VCF_windowhe_plotinR.txt'
+### Instructions for subsequently running 'VCF_windowhe_plotinR.txt' script in R
+
+This file with count data can be further analysed and plotted in R using the script 'VCF_windowhe_plotinR.txt'
 To do so for the example dataset (135 bears, 3 chromosomes), execute in R the following commands:
 
 First load all required functions:
