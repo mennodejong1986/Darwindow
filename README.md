@@ -59,7 +59,7 @@ Maximum amount of missing data per window:
 
 *getwindowdata(maxmiss=0.8,suffix="20000.brownbears.three_scaffolds.txt",vcfsamples="myvcfsamples.txt",samplefile="popfile.txt",annotated=FALSE,indlevel=TRUE,poplevel=FALSE,mydir=mywd)*
 
-**Define population order and optionally exclude populations:**
+**Optionally define population order (to be used in some of the output plots):**
 
 *mypoporder	<- c("MiddleEast","Himalaya","Europe","SouthScand","MidScand","NorthScand","Baltic","Ural","CentreRus2","CentreRus","Yakutia","Amur","Hokkaido","Sakhalin","Magadan","Kamtchatka","Aleutian","Kodiak","Alaska","ABCa","ABCbc","ABCcoast2","Westcoast","ABCcoast1","HudsonBay","polar","Black")* 
 
@@ -83,15 +83,17 @@ Maximum amount of missing data per window:
 
 **Detect runs of homozygosity:**
 
-Either specify a universal threshold heterozygosity value for all individuals:
+First you need to define the maximum heterozygosity threshold for a ROH. This depends on the mean genome-wide heterozygosity. For example, if the mean heterozygosity is 0.25%, you might set the threshold to 0.05. If the mean heterozygosity is 0.10%, you might want to set the threshold to 0.02%.
+
+One option is to specify a universal threshold value for all individuals:
 
 *hethres_vec	<- 0.05*	
 
-Or alternatively specify threshold per individual:
+The second option is to specify a threshold per individual:
 
 *hethres_vec	<- ifelse(dwd$ind$pop=="polar",0.001,0.05)*
 
-Detect ROHs based on the specified threshold:
+Once you defined the threshold, run the following functions to detect ROHs:
 
 *findroh(silent=TRUE,hethreshold=hethres_vec,min_rle_length=1,windowsize=window_size,nwindows=nr_windows)*
 
