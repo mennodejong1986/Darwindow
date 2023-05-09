@@ -37,6 +37,23 @@
 # bcftools stats -s - mydata.noindels.vcf.gz > bcftools.stats.txt
 # grep 'PSC' bcftools.stats.txt | tail -n+3 | cut -f3-6 | sed 's/-//g' | sed 1i'name\tref\talt\thet' > bcftools.stats.he.txt
 
+## 30-03-2023:
+# ESTIMATION OF TIME A ROH ORIGINATED:
+# From Femerling et al 2023, Genetic load and adaptive potential of a recovered avian species that narrowly avoided extinction
+# The year represents the estimated time at which a category of ROH length was formed assuming a recombination rate of 1 cM/Mb (for mammals) and using the formula L = 100/2t cM from (Thompson 2013).
+# In here, L is the ROH length and cM is the recombination rate, to obtain t the time of ROH coalescence in generations. (And assuming ROH-length starts at 100 Mb?)
+# Generations ago were converted assuming a generation time of 2 years from the time of sampling. 
+# For more information: Thompson EA. 2013. Identity by Descent: Variation in Meiosis, Across Genomes, and in Population
+# So for example, for brown bears, with a generation time of 10 years, a ROH of 1 Mb, would have originated around 50 generations (and thus 500 years ago).
+# However, my simulations indicate that observed ROHs in Kodiak (length versus number distribution) originated more like 500 generations ago.
+#
+# From Martin et al., 2023, Runs of homozygosity reveal past bottlenecks and contemporary inbreeding across diverging populations of an island-colonizing bird
+# 'Long ROH ranged from 1 to 5.5 Mb (Figure 5), representing regions with shared ancestry 10–50 generations (~20–100years) ago, 
+# while short ROH 250 kb–1 Mb in length originated 50–200 generations (~100–400 years) ago.' 
+#
+# See also (for an early (?) study of ROHS in humans):
+# McQuillan et al. 2008, Runs of Homozygosity in European Populations
+
 examplerun<-function()
 	{
 	# LOAD FUNCTIONS:
@@ -258,7 +275,8 @@ getwindowdata<-function(suffix="100000.allsites_multi.txt",snpdata=FALSE,vcfsamp
 			return(cat("ERROR: Factor.",sep="\n"))
 			}
 		}else{
-		cat("ERROR: As of 23-04-2021, user needs to provide the file 'myinfo.samples.txt' (or other name specified to the vcfsamples flag) generated with the 'bcftools query --list-samples' command.",sep="\n")
+		cat("ERROR: file specified to vcfsamples flag not found.",sep="\n")
+		cat("As of 23-04-2021, user needs to provide the file 'myinfo.samples.txt' (or other name specified to the vcfsamples flag) generated with the 'bcftools query --list-samples' command.",sep="\n")
 		return(cat("This file is used to determine the order of the samples.",sep="\n"))
 		}
 	if(nrow(vcfind)>nrow(ind))
@@ -595,6 +613,7 @@ getwindowdata<-function(suffix="100000.allsites_multi.txt",snpdata=FALSE,vcfsamp
 		}	
 	if(!file.exists("bcftools.stats.he.txt"))
 		{
+		cat(" ",sep="\n")
 		cat("WARNING: File 'bcftools.stats.he.txt' not found.",sep="\n")
 		cat("If you want to compare heterozygosity values generated with Darwindow to values generated with bcftools stats -s -, make sure the directory contains a file called 'bcftools.stats.he.txt'.",sep="\n")
 		cat("This should be a tab separated file with four columns, named 'name', 'ref', 'alt', 'het'.",sep="\n")
@@ -602,7 +621,9 @@ getwindowdata<-function(suffix="100000.allsites_multi.txt",snpdata=FALSE,vcfsamp
 		cat("zgrep -v 'INDEL' mydata.vcf.gz | gzip > mydata.noindels.vcf.gz",sep="\n")
 		cat("bcftools stats -s - mydata.noindels.vcf.gz > bcftools.stats.txt",sep="\n")
 		cat("grep 'PSC' bcftools.stats.txt | tail -n+3 | cut -f3-6 | sed 's/-//g' | sed 1i'name\tref\talt\thet' > bcftools.stats.he.txt",sep="\n")
+		cat(" ",sep="\n")
 		}else{
+		cat(" ",sep="\n")
 		cat("Adding heterozygosity counts generated with bcftools stats -s -.",sep="\n")
 		x		<- read.table("bcftools.stats.he.txt",header=TRUE)
 		if(any(!c("name","ref","alt","het")%in%colnames(x)))
@@ -622,6 +643,7 @@ getwindowdata<-function(suffix="100000.allsites_multi.txt",snpdata=FALSE,vcfsamp
 			return(cat("ERROR: after merging, different number of rows than in dwd$ind dataframe.",sep="\n"))
 			}
 		dwd$ind		<<- ind
+		cat(" ",sep="\n")
 		}
 	if(poplevel)
 		{
@@ -1394,14 +1416,13 @@ rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotna
 	if(!is.null(ypopcol))
 		{
 		mybarplot2	<- mybarplot[1:ninds]
-		mypops	<- unique(as.character(ind$pop))
+		mypops		<- unique(as.character(ind$pop))
 		for (mypop in mypops)
 			{
 			popindex	<- which(as.character(ind$pop)==mypop)
 			npopind		<- length(popindex)
 			popcol		<- as.character(ind$popcol[popindex][1])
 			points(x=mybarplot2[popindex],y=rep(ypopcol,npopind),cex=2.5,col=popcol,pch=15)
-			#axis(1,at=mybarplot[popindex],labels=ind$name[popindex],col.axis=popcol,las=2,mycex)
 			}
 		}
 	mtext(side=2,ylabel,line=yline,cex=2.75,outer=TRUE,las=0)
@@ -1422,6 +1443,7 @@ rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotna
 		cat("Stacked ROH barplot with ROH-score per bin per sample has been exported to the directory:",sep="\n")
 		cat(getwd(),sep="\n")
 		}
+	cat("TIP: you might want to use the mywidth flag to adjust the width of the graph. The default (which works for 100ish samples), is 0.75. But if you have only a few samples, set mywidth to a higher value.",sep="\n")
 	}
 
 # one plot per individual:
@@ -1685,11 +1707,11 @@ indlisthisto<-function(export=NULL,inputlist=dwd$lrohlist2,mybreaks=seq(-0.05,5,
 
 runindhisto<-function(exporttype=NULL,missrange=seq(0.3,0.9,0.1),my_breaks=seq(-0.01,5,0.005),plot_name="He_histo_window",input_df=dwd$regionhedf,miss_df=NULL,window_size=100000,n_windows=5,x_max=0.6,y_max=15,silent=TRUE,legend_cex=2.5)
 	{
+	cat("Creating heterozygosity histograms using various thresholds for missing data...",sep="\n")
 	for(missvalue in missrange)
 		{
-		if(!silent){cat(missvalue,sep="\n")}
-		myplotname	<- paste(plot_name,"maxmiss",missvalue,sep="_")
-		indhisto(export=exporttype,plotname=myplotname,mybreaks=my_breaks,inputdf=input_df,missdf=miss_df,maxmiss=missvalue,silent=TRUE,windowsize=window_size,nwindows=n_windows,xmax=x_max,ymax=y_max,legendcex=legend_cex)
+		cat(paste("Missing data threshold: ",missvalue,".",sep=""),sep="\n")
+		indhisto(export=exporttype,plotname=plot_name,mybreaks=my_breaks,inputdf=input_df,missdf=miss_df,maxmiss=missvalue,silent=TRUE,windowsize=window_size,nwindows=n_windows,xmax=x_max,ymax=y_max,legendcex=legend_cex)
 		}
 	}
 
@@ -1709,11 +1731,19 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 		}else{
 		myfilter<- rep(TRUE,nrow(inputmat)) 
 		}
+	if(!any(myfilter))
+		{
+		return(cat("Zero retained datapoints. Not creating histogram",sep="\n"))
+		}
 	#
 	if(!silent){cat(max(inputmat[myfilter,1],na.rm=TRUE),sep="\n")}
-	if(max(inputmat[myfilter,1],na.rm=TRUE)>max(mybreaks))
+	obsmax	<- max(inputmat[myfilter,1],na.rm=TRUE)
+	obsmin	<- min(inputmat[myfilter,1],na.rm=TRUE)
+	if(obsmax>max(mybreaks))
 		{
-		return(cat("ERROR: mybreaks do not span entire range.",sep="\n"))
+		cat("ERROR: mybreaks do not span entire range. Redefine the mybreaks flag. Default is set to: seq(-0.01,5,0.005), denoting minimum, maximum and stepsize respectively.",sep="\n")
+		cat(paste("Observed maximum: ",round(obsmax,4),sep=""),sep="\n")
+		return(cat(paste("Observed minimum: ",round(obsmin,4),sep=""),sep="\n"))
 		}
 	#
 	if(!is.null(export))
@@ -1765,23 +1795,34 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 		cat("Histograms showing genome wide scores per sample has been exported to the directory:",sep="\n")
 		cat(getwd(),sep="\n")
 		}
+	cat(paste("WARNING: maximum of x-axis is set to ",xmax,". Yan can adjust this threshold using the xmax flag.",sep=""),sep="\n")
+	cat(paste("WARNING: maximum of y-axis is set to ",ymax,". You can adjust this threshold using the ymax flag.",sep=""),sep="\n")
 	}
 
-indbarplot<-function(export=NULL,plotname="Genomewide_regionHe_bootstrap",ylabel="Heterozygosity (%)",yline=5.5)
+indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozygosity (%)",yline=5.5,silent=TRUE,mywidth=0.75)
 	{
-	ind	<- dwd$ind
-	ind	<- ind[order(ind$pop),]
+	ind			<- dwd$ind
+	ind			<- ind[order(ind$pop),]
 	popcolours	<- as.character(ind$popcol)
 	ninds		<- nrow(ind)
 	#
-	btmean		<- ind$filterhe_bootmean
-	btsd		<- ind$filterhe_bootsd
-	ymax		<- 1.05*max(btmean+2*btsd,na.rm=TRUE)
+	if(!"filterhe_bootmean"%in%colnames(ind)|!"filterhe_sd"%in%colnames(ind))
+		{
+		cat("WARNING: column filterhe_bootmean and/or filterhe_sd not present in inds dataframe.",sep="\n")
+		ymax		<- 1.05*max(ind$filterhe,na.rm=TRUE)
+		addbars		<- FALSE
+		}else{
+		btmean		<- ind$filterhe_bootmean
+		btsd		<- ind$filterhe_bootsd
+		ymax		<- 1.05*max(btmean+2*btsd,na.rm=TRUE)
+		addbars		<- TRUE
+		}
+	if(!silent){cat(ymax,sep="\n")}
 	#
 	if(!is.null(export))
 		{
-		mywidth=0.75
-		mywidth2=75
+		mywidth2	<- mywidth*100
+		plotname	<- ifelse(addbars,paste(plotname,"bootstrap",sep="_"),plotname)
 		if(export=="eps"){postscript(paste(plotname,"ind.barplot.eps",sep="."),width=ninds*mywidth,height=8)}
 		if(export=="pdf"){pdf(paste(plotname,"ind.barplot.pdf",sep="."),width=ninds*mywidth,height=8)}
 		if(export=="png"){png(paste(plotname,"ind.barplot.png",sep="."),width=ninds*mywidth2,height=900)}
@@ -1790,15 +1831,19 @@ indbarplot<-function(export=NULL,plotname="Genomewide_regionHe_bootstrap",ylabel
 	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
 	barcenters	<- barplot(ind$filterhe,col=popcolours,border=NA,names.arg=ind$name,las=2,yaxt='n',ylim=c(0,ymax))
 	axis(side=2,cex.axis=2.5,las=1)
-	arrows(barcenters,btmean-btsd*2,barcenters,btmean+btsd*2,lwd=0.5,angle=90,code=3,length=0.03)
+	if(addbars)
+		{
+		arrows(barcenters,btmean-btsd*2,barcenters,btmean+btsd*2,lwd=0.5,angle=90,code=3,length=0.03)
+		}
 	mtext(side=2,"Heterozygosity (%)",line=yline,cex=2.75,outer=TRUE,las=0)
 	#mtext(side=1,"Sample",line=6.5,cex=1.75)
 	if(!is.null(export))
 		{
 		dev.off()
-		cat("Barplot with average genome wide scores (and bootstrap 95% confidence intervals) per sample has been exported to the directory:",sep="\n")
+		cat("Barplot with average genome wide scores (and optionally bootstrap 95% confidence intervals) per sample has been exported to the directory:",sep="\n")
 		cat(getwd(),sep="\n")
 		}
+	cat("TIP: you might want to use the mywidth flag to adjust the width of the graph. The default (which works for 100ish samples), is 0.75. But if you have only a few samples, use a higher value for mywidth.",sep="\n")
 	}
 
 indlistboxplot<-function(export=NULL,inputlist=dwd$rohlengths,plotname="ROHlengths_boxplot",ylabel="ROH length (Kb)",yline=3.25,maxmiss=0.6)
@@ -1834,7 +1879,7 @@ indlistboxplot<-function(export=NULL,inputlist=dwd$rohlengths,plotname="ROHlengt
 		}
 	}
 
-indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.6)
+indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.6,mywidth=0.75)
 	{
 	loc	<- dwd$loc
 	#
@@ -1859,8 +1904,7 @@ indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_reg
 	#
 	if(!is.null(export))
 		{
-		mywidth=0.75
-		mywidth2=75
+		mywidth2	<- 100*mywidth
 		plotlabel	<- paste("n",samplesize,sep="")
 		if(export=="eps"){postscript(paste(plotname,plotlabel,"ind.eps",sep="."),width=ninds*mywidth,height=8)}
 		if(export=="pdf"){pdf(paste(plotname,plotlabel,"ind.pdf",sep="."),width=ninds*mywidth,height=8)}
@@ -1878,6 +1922,8 @@ indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_reg
 		cat("Boxplot with average genome wide scores per sample has been exported to the directory:",sep="\n")
 		cat(getwd(),sep="\n")
 		}
+	cat(paste("WARNING: maximum of y-axis is set to ",ymax,". You can adjust this threshold using the ymax flag.",sep=""),sep="\n")
+	cat("TIP: you might want to use the mywidth flag to adjust the width of the graph. The default (which works for 100ish samples), is 0.75. But if you have only a few samples, use a higher value for mywidth.",sep="\n")
 	}
 
 popboxplot<-function(export=NULL,ymax=NULL,mywidth=0.75,ymin=NULL,indscore="regionhe",plotname="Genomewide_He",ylabel="Heterozygosity (%)",yline=3.25,side4label=NULL)
@@ -1922,6 +1968,7 @@ popboxplot<-function(export=NULL,ymax=NULL,mywidth=0.75,ymin=NULL,indscore="regi
 		cat("Boxplot with average genome wide scores per sample has been exported to the directory:",sep="\n")
 		cat(getwd(),sep="\n")
 		}
+	cat("TIP: you might want to use the mywidth flag to adjust the width of the graph. The default is 0.75. But if you have only a few populations, use a higher value for mywidth.",sep="\n")
 	}
 
 popboxplot2<-function(export=NULL,mywidth=0.75,ymax=NULL,ymin=NULL,indscore1="regionhe",indscore2="regionhe2",plotname="He_with_vs_withoutROH",label1="With ROHs",label2="Without ROHs",ylabel="Genome-wide He (%)",yline=3.25)
@@ -2513,7 +2560,7 @@ heperroh<-function(export=NULL,plotname="RohHe_vs_RohLength",samplevec=NULL,dope
 	}
 
 # depends on plotscaffold
-runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,my_factor=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE)
+runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,my_factor=1,height_unit=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE)
 	{
 	ind				<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])	
 	loc				<- dwd$loc
@@ -2533,7 +2580,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 			{
 			myscaf	<- myscaffolds[scafnr]
 			if(!be_silent){cat(myscaf,sep="\n")}
-			indscaffold(inputdf1=input_df1,inputdf2=input_df2,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4)
+			indscaffold(inputdf1=input_df1,inputdf2=input_df2,heightunit=height_unit,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4)
 			if(add_roh)
 				{
 				# store ROH position information
@@ -2562,7 +2609,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 		}
 	}
 
-indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE)
+indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,heightunit=1,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE)
 	{
 	loc				<- dwd$loc
 	if(!scaffoldname%in%as.character(loc$contig))
@@ -2635,10 +2682,12 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,myfactor=1,do_reorder=TRUE
 	if(!silent){cat("Creating plot outline...",sep="\n")}
 	if(addyaxis)
 		{
-		plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,ylab="",xlab="",las=1)
+		#plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,ylab="",xlab="",las=1)
+		plot(windowmid,scoredf[,1],col="white",ylim=c(0,heightunit*ninds),pch=16,ylab="",xlab="",las=1)
 		mtext("Heterozygosity (%)",side=2,line=4,cex=2)
 		}else{
-		plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,yaxt='n',ylab="",xlab="")
+		#plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,yaxt='n',ylab="",xlab="")
+		plot(windowmid,scoredf[,1],col="white",ylim=c(0,heightunit*ninds),pch=16,yaxt='n',ylab="",xlab="")
 		}
 	for(k in c(1:ninds))
 		{
@@ -2671,7 +2720,8 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,myfactor=1,do_reorder=TRUE
 				rohstart	<- rlestart[RLEindices]*(nwindows*win_size)/1000000
 				for(i in c(1:nroh))
 					{
-					rect(xleft=rohstart[i],ybottom=k-1,xright=rohend[i],ytop=k-0.2,col="grey95",border=NA)
+					#rect(xleft=rohstart[i],ybottom=k-1,xright=rohend[i],ytop=k-0.2,col="grey95",border=NA)
+					rect(xleft=rohstart[i],ybottom=heightunit*k-heightunit*1,xright=rohend[i],ytop=heightunit*k-heightunit*0.2,col="grey95",border=NA)
 					}
 				# add info to dataframe:
 				indrohdf	<- data.frame("sample"=indname,"pop"=popname,"popcol"=popcol,"chr"=scaffoldname,"start"=rohstart,"end"=rohend)	
@@ -2687,22 +2737,26 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,myfactor=1,do_reorder=TRUE
 			}
 		if(addzero)
 			{
-			abline(h=k-1,col="grey90",lty=2)
+			abline(h=heightunit*k-heightunit*1,col="grey90",lty=2)
 			}
 		if(dolines)
 			{
 			if(!is.null(inputdf2))
 				{
-				lines(windowmid,indscores2+(k-1),col="grey70",lwd=linewidth)
+				#lines(windowmid,indscores2+(k-1),col="grey70",lwd=linewidth)
+				lines(windowmid,indscores2+(heightunit*k-heightunit*1),col="grey70",lwd=linewidth)
 				}
-			lines(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),lwd=linewidth)
+			#lines(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),lwd=linewidth)
+			lines(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),lwd=linewidth)
 			}else{
-			points(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
+			#points(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
+			points(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
 			}
 		}
 	if(addside4)
 		{
-		axis(side=4,at=seq(0.25,ninds-0.75,1),label=indnames,cex=1,las=1)
+		#axis(side=4,at=seq(0.25,ninds-0.75,1),label=indnames,cex=1,las=1)
+		axis(side=4,at=seq(0.25*heightunit,heightunit*ninds-(heightunit-0.25*heightunit),heightunit*1),label=indnames,cex=1,las=1)
 		}
 	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
 	mtext(paste("scaffold ",scaffoldname,sep=""),side=3,line=2,cex=1.75)
@@ -2710,7 +2764,8 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,myfactor=1,do_reorder=TRUE
 		{
 		if(addroh)
 			{
-			axis(side=2,at=seq(0.25,ninds-0.75,1),label=frohvec,cex=0.5,las=1)
+			#axis(side=2,at=seq(0.25,ninds-0.75,1),label=frohvec,cex=0.5,las=1)
+			axis(side=2,at=seq(0.25*heightunit,heightunit*ninds-(heightunit-0.25*heightunit),heightunit*1),label=frohvec,cex=0.5,las=1)
 			mtext("F_roh",side=2,line=4,cex=2)
 			}else{
 			if(addhe)
