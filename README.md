@@ -24,7 +24,7 @@ The columns 'nmiss_1', 'nsites_1', 'nhet_1' and 'nhomo_1' give for each window t
 This file with count data can be further analysed and plotted in R using the script 'VCF_windowhe_plotinR.txt'
 To do so for the example dataset (135 bears, 3 chromosomes), execute in R the following commands:
 
-First load all required functions:
+**First load all required functions:**
 
 *source("VCF_darwindow.plotinR.txt")*
 
@@ -36,7 +36,7 @@ First load all required functions:
 
 *library("graphics")*
 
-Next define the settings:
+**Next define the settings:**
 
 *window_size	<- 20000*		  window size in bp
 
@@ -44,7 +44,7 @@ Next define the settings:
 
 *miss_max	  <- 0.8*         exclude windows with more more missing data 
 
-Import data:
+**Import data:**
 
 *mywd		<- "C:/path/to/directory/"*
 
@@ -52,19 +52,19 @@ Import data:
 
 *getwindowdata(maxmiss=0.8,suffix="20000.brownbears.three_scaffolds.txt",vcfsamples="myvcfsamples.txt",samplefile="popfile.txt",annotated=FALSE,indlevel=TRUE,poplevel=FALSE,mydir=mywd)*
 
-Define population order and optionally exclude populations:
+**Define population order and optionally exclude populations:**
 
 *mypoporder	<- c("MiddleEast","Himalaya","Europe","SouthScand","MidScand","NorthScand","Baltic","Ural","CentreRus2","CentreRus","Yakutia","Amur","Hokkaido","Sakhalin","Magadan","Kamtchatka","Aleutian","Kodiak","Alaska","ABCa","ABCbc","ABCcoast2","Westcoast","ABCcoast1","HudsonBay","polar","Black")* 
 
 *reorder_pop(poporder=mypoporder)*
 
-Calculate genome-wide heterozygosity:
+**Calculate genome-wide heterozygosity:**
 
 *calcwindowhe(maxmiss=miss_max)*
 
 *calcregionhe(maxmiss=miss_max,nwindows=nr_windows)
 
-Plot heterozygosity:
+**Plot heterozygosity:**
 
 *popboxplot(export="pdf",mywidth=0.5)*
 
@@ -74,7 +74,7 @@ Plot heterozygosity:
 
 *indboxplot(export="pdf",inputdf=dwd$hedf,plotname="Genomewide_windowHe",ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=miss_max,ymax=0.95,mywidth=0.5)*
 
-Detect runs of homozygosity:
+**Detect runs of homozygosity:**
 Either use a universal threshold heterozygosity value for all individuals:
 
 *hethres_vec	<- 0.05*	
@@ -89,7 +89,7 @@ Or alternatively specify threshold per individual:
 
 *getrohbin()*
 
-Plot runs of homozygosity:
+**Plot runs of homozygosity:**
 
 *runindscaffold(height_unit=1,do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=0.9,n_windows=nr_windows,min_rle_len=1,window_size=window_size,line_width=0.1)*
 
@@ -97,7 +97,7 @@ Visually examine the output line charts. Do regions marked as run of homozygosit
 If not, try different settings (i.e.: use different values for he_thres_vec and/or nr_windows).
 If yes, then you can proceed and create the plots with ROH summary statistics.
 
-Plot ROH summary statistics:
+**Plot ROH summary statistics:**
 
 *popboxplot(export="pdf",ymax=NULL,indscore="froh",plotname="Genomewide_froh",ylabel="F_roh",mywidth=0.5)*
 
