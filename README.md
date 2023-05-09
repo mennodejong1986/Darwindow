@@ -26,9 +26,13 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 
 First load all required functions:
 source("VCF_darwindow.plotinR.txt")
+
 if(!"zoo"%in%rownames(installed.packages())){install.packages("zoo")}
+
 if(!"graphics"%in%rownames(installed.packages())){install.packages("graphics")}
+
 library("zoo")
+
 library("graphics")
 
 Next define the settings:
