@@ -1,4 +1,4 @@
-### Darwindow
+# Darwindow
 
 Darwindow is a small tool, consisting of a Unix and a R script, to calculate and plot population-genetic estimates on a sliding-window basis, using as input a gVCF file  (i.e., a vcf-file containing information on both monomorphic and polymorphic sites for the entire genome). 
 
@@ -7,7 +7,7 @@ Darwindow is particularly useful to perform run of homozygosity (ROH) analyses. 
 The average genome-wide heterozygosity estimates produced by Darwindow are near-identical to the estimates obtained with 'bcftools stats -s -', assuming that indels have been removed from the input vcf-file using the command 'zgrep -v "INDEL" data.vcf.gz | gzip > data.noindels.vcf.gz' (this step is included in Darwindow pipeline).
 
 
-# Example run
+### Instructions
 
 In order to run Darwindow in the Unix command line, follow the instructions in the top section of the VCF_darwindow.sh script.
 This will generate file(s) containing window-based counts. 
