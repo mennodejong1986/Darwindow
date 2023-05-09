@@ -38,11 +38,11 @@ To do so for the example dataset (135 bears, 3 chromosomes), execute in R the fo
 
 **Next define the settings:**
 
-Window size in bp:
+Window size in bp (should correspond to window size used when running VCF_darwindow.sh script):
 
 *window_size	<- 20000*		  
 
-Minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 10, and window size is 20000, then reported ROHs are minimum 200Kb):
+Minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 10, and window size is 20000, then reported ROHs are at minimum 200Kb):
 
 *nr_windows	<- 10*			    
 
