@@ -131,7 +131,8 @@ The most informative ROH summary plot is arguably the stacked barplot:
 
 *rohbarplot(inputdf=dwd$nrohbindf,ylabel="# ROHs",plotname="ROHn_barplot",export="pdf",yline=4.5,mywidth=0.2,legendcex=1.75,addlegend=TRUE,mycolours=NULL,ypopcol=1850,legx=20,legy=1700)*
 
-
+![alt text](https://github.com/mennodejong1986/Darwindow/blob/main/ROH_barplot.png)
+***Figure 3. Stacked barplots.*** *Sample specific ROH-distributions. The colour bar above the stacked barplot indicates population assignment.*
 
 If you want to use the plot for scientific posters, you could vary the background colour:
 
