@@ -108,7 +108,7 @@ Once you defined the threshold, run the following functions to detect ROHs:
 
 *runindscaffold(height_unit=1,do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=miss_max,n_windows=nr_windows,min_rle_len=1,window_size=window_size,line_width=0.1)*
 
-Visually examine the output line charts. Do regions marked as run of homozygosity (grey areas) indeed have low heterozygosity?
+Visually examine the output line charts (see Figure 1). Do regions marked as run of homozygosity (grey areas) indeed have low heterozygosity?
 If not, try different settings (i.e.: use different values for he_thres_vec and/or nr_windows).
 If yes, then you can proceed and create the final plots with ROH summary statistics.
 
@@ -127,6 +127,8 @@ The most informative ROH summary plot is arguably the stacked barplot:
 *rohbarplot(inputdf=dwd$frohbindf,ylabel="F-roh",plotname="ROHf_barplot",export="pdf",yline=3,mywidth=0.2,legendcex=1.75,addlegend=TRUE,mycolours=NULL,ypopcol=0.78,legx=30,legy=0.725)*
 
 *rohbarplot(inputdf=dwd$nrohbindf,ylabel="# ROHs",plotname="ROHn_barplot",export="pdf",yline=4.5,mywidth=0.2,legendcex=1.75,addlegend=TRUE,mycolours=NULL,ypopcol=1850,legx=20,legy=1700)*
+
+
 
 If you want to use the plot for scientific posters, you could vary the background colour:
 
