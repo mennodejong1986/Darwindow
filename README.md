@@ -7,6 +7,9 @@ Darwindow is particularly useful to perform run of homozygosity (ROH) analyses. 
 ![alt text](https://github.com/mennodejong1986/Darwindow/blob/main/ROH_regions.png)
 ***Figure 1. Darwindow allows visual examination of regions marked as run of homozygosity.*** *Variation of heterozygosity levels (He) across a randomly chosen chromosome, for a random subset of brown bear samples, depicting He-levels of non-overlapping 20 kb windows, with grey segments highlighting the genomic regions which are marked as run of homozygosity (ROH) by Darwindow. Values along the y-axis represent sample and chromosome-specific FROH-values (proportion of chromosome marked as ROH).*
 
+If you use this pipeline for your own research, please cite:
+
+*De Jong et al., 2023, Range-wide whole-genome resequencing of the brown bear reveals drivers of intraspecies divergence. Commun Biol 6, 153. https://doi.org/10.1038/s42003-023-04514-w*
 
 ## How to run 'VCF_darwindow.sh'
 
