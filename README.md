@@ -79,7 +79,7 @@ Maximum amount of missing data per window:
 *indboxplot(export="pdf",inputdf=dwd$hedf,plotname="Genomewide_windowHe",ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=miss_max,ymax=0.95,mywidth=0.5)*
 
 ![alt text](https://github.com/mennodejong1986/Darwindow/blob/main/Heterozygosity_plots.png)
-***Figure 2. Genome-wide heterozygosity.*** *Left: Boxplot with sample-specific genome-wide heterozygosity scores, grouped by population. Right: comparison between Darwindow and bcftools heterozygosity estimates.The average genome-wide heterozygosity estimates produced by Darwindow are near-identical to the estimates obtained with 'bcftools stats -s -', assuming that indels have been removed from the input vcf-file using the command 'zgrep -v "INDEL" data.vcf.gz | gzip > data.noindels.vcf.gz' (this step is included in Darwindow pipeline).* 
+***Figure 2. Genome-wide heterozygosity.*** *Left: Boxplot with sample-specific genome-wide heterozygosity scores, grouped by population. Right: comparison between Darwindow and bcftools heterozygosity estimates.The average genome-wide heterozygosity estimates produced by Darwindow are near-identical to the estimates obtained with 'bcftools stats -s -', assuming that indels have been removed from the input vcf-file using the command 'zgrep -v "INDEL" data.vcf.gz | gzip > data.noindels.vcf.gz'. (This step is included in Darwindow pipeline).* 
 
 **Detect runs of homozygosity:**
 
