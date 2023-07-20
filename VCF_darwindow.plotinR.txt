@@ -1070,7 +1070,7 @@ calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE)
 	}
 
 # find stretches of regions with low He
-findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=4,windowsize=100000,nwindows=5)
+findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=100000,nwindows=5)
 	{
 	# nwindow: 			number of windows which make up a region (see calcregionhe function)
 	# min_rle_length: 	minimum number of adjacent regions with low heterozygosity to be considered a run of homozygosity
@@ -1786,7 +1786,7 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 		mtext(side=3,paste("per ",nwindows," adjacent ",windowsize/1000,"K windows",sep=""),line=-1.25,cex=1.75)
 		}
 	# mask negative:
-	rect(-1,-ymax,0,ymax,col="white",border="white")	
+	rect(-1,-ymax*2,0,ymax*2,col="white",border="white")	
 	#legend(legendpos,legend=popinfo$pop,bty='n',fill=as.character(popinfo$popcol),cex=legendcex)
 	legend(legendpos,legend=dwd$poporder,bty='n',fill=dwd$colourorder,border=dwd$colourorder,cex=legendcex)
 	if(!is.null(export))
@@ -2560,7 +2560,7 @@ heperroh<-function(export=NULL,plotname="RohHe_vs_RohLength",samplevec=NULL,dope
 	}
 
 # depends on plotscaffold
-runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,my_factor=1,height_unit=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE)
+runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,plot_width=14,my_factor=1,height_unit=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE)
 	{
 	ind				<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])	
 	loc				<- dwd$loc
@@ -2580,7 +2580,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 			{
 			myscaf	<- myscaffolds[scafnr]
 			if(!be_silent){cat(myscaf,sep="\n")}
-			indscaffold(inputdf1=input_df1,inputdf2=input_df2,heightunit=height_unit,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4)
+			indscaffold(inputdf1=input_df1,inputdf2=input_df2,plotwidth=plot_width,heightunit=height_unit,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4)
 			if(add_roh)
 				{
 				# store ROH position information
@@ -2609,7 +2609,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 		}
 	}
 
-indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,heightunit=1,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE)
+indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE)
 	{
 	loc				<- dwd$loc
 	if(!scaffoldname%in%as.character(loc$contig))
@@ -2664,7 +2664,7 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,heightunit=1,myfactor=1,do
 			}else{
 			plotname	<- paste(symboltype,win_size,scaffoldname,"pdf",sep=".")
 			}
-		pdf(plotname,width=14,height=ninds*heightfactor1+heightfactor2)
+		pdf(plotname,width=plotwidth,height=ninds*heightfactor1+heightfactor2)
 		}
 	par(cex.lab=1.75,cex.axis=1.25,mar=c(4.5,6,4,9))
 	windowmid				<- loc$mid[loc$contig==scaffoldname]
