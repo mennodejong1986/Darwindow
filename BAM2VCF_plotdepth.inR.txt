@@ -1,0 +1,648 @@
+# source("E:/PhD/General/Rawdata2snps/BAM2VCF_plotdepth.inR.txt")
+
+# Expects in working directory:
+# - popfile.txt										# 3 tab separated columns, named: name, pop, popcol
+# - sampledepth.idepth.txt							# created by BAM2VCF script
+# - sampleinfo.DP.txt								# created by BAM2VCF script
+# - sampleinfo.GQ.txt								# created by BAM2VCF script
+# - sampleinfo.pos.txt								# created by BAM2VCF script (since march 2022)
+# - myinfo.samples.txt								# created by BAM2VCF script
+# - bcfstats.he.depth01.txt until bcfstats.he.depth31.txt		# created by BAM2VCF script; only optional, when wanting to plot heterozygosity
+
+# Data will be stored in objects:
+# - ind
+# - popdf
+# - thindepthdf
+# - hedf
+
+# How to interprete the output plots?
+# The most relevant plot is 'Depth.all.logscale.pdf' (or 'Depth.all.linear.pdf')
+# This plot shows a histogram of the number of sites in your thinned dataset with a certain depth. 
+# Ideally there would be only one peak, which would mean the data is clean.
+# If the data is multi-modal, ideally you would choose mindepth and maxdepth values which cut the satellite peaks out.
+# Note, however, that the presence of multiple peaks can have various reasons, and it would be good if you know the underlying cause.
+# For instance, if plotting X-chromosomal data, you would expect two peaks: the satellite peak representing the pseudoautosomal region, and the main peak representing the remainder of the genome.
+# To understand the underlying cause, have a look at the 'Depth_along_chrom' plot to see how the depth is distributed along the chromosome.     
+ 
+# The main peak should be close to the expected peak.
+# For instance, if you sequenced 80 individuals with a mean depth of 10x, you woudld expect an overall depth (for all samples combined) of around 800.
+# If you sequenced 50 individuals with a mean depth of 20x, you would expect an overall depth of 1000. Etc.
+ 
+# The left solid red line indicates the minimum depth specified when plotting the data. 
+# The right solid red line the maximum depth. You can recreate the plot with different mindepth and maxdepth.
+# The percentage above the plot will tell you how much data you will retain if using this depth filter settings. 
+ 
+# As a rule of thumb, mindepth is expected to be around '0.6x mean depth', and the max depth around '1.5x mean depth'. 
+# In other words, if the mean overall depth is 800, the expected minimum depth threshold is 800x0.6=480 and a expected maximum depth is 800*1.5=1200. 
+# Of course, this is just a rule of thumb. Customise the depth settings a bit less stringent in case too much data is discarded otherwise.  
+
+# Once you decided on the minimum and maximum depth values, specify these values in the BAM2VCF script and proceed with the globalfilter step.
+
+
+# most basic use:
+examplerun<-function()
+	{
+	## load functions into R:
+	source("BAM2VCF_plotdepth.inR.txt")
+	#
+	## import sample information:
+	getsampleinfo(popfile="popfile.txt")
+	## import data:
+	getvcftoolsdepth()
+	getlocusdepth()
+	getlocusquality()
+	qualityvsdepth()
+	#
+	## plot depth:
+	plotpos_vs_depth(export="pdf",dolog=FALSE,addpos=NULL,thin=1,mindepth=1200,maxdepth=2200)
+	plotoveralldepth(export="pdf",dolog=TRUE,mindepth=1200,maxdepth=2200,expmean=10)
+	plotoveralldepth(export="pdf",dolog=FALSE,mindepth=1200,maxdepth=2200,expmean=10)
+	sampleboxplot(export="pdf",indscore="depth",plotname="Depth",ylabel="Mean depth")
+	# sampleboxplot(export="pdf",indscore="r",plotname="GQ_vs_depth",ylabel="Explained variance (r2)")
+	# all_vs_sampledp(export="pdf",dolog=FALSE,maxdepth=2200)
+	#
+	## OPTIONAL ADDITIONAL FIGURES
+	## Run these commands only in case data on heterozygosity is also present (by default not the case): 
+	# getbcfstats(silent=TRUE,refdepth=8)	
+	# sampleboxplot(export="pdf",indscore="he_perc",plotname="He",ylabel="Heterozygosity (%)")
+	# plothe_vs_depth(export="pdf",poslegend="topleft",dolabels=TRUE,printname=ind$name,minind=10)
+	# plothe_vs_depth(export="pdf",poslegend="topleft",dolabels=FALSE,minind=10)
+	# multiplotmat(export="pdf",plotname="groupsamples_depthclass_he",ylabel="Heterozygosity (%)",plotlabel="Scaffold 1",inputmat=100*hemat[,2:32],ymax=0.4)
+	}
+
+
+#####################################
+
+
+
+getsampleinfo<-function(popfile=NULL)
+	{
+	if(is.null(popfile))
+		{
+		return(cat("ERROR: No popfile defined.",sep="\n"))
+		}
+	ind		<<- read.table(file=popfile,header=TRUE)
+	if(any(!c("name","pop","popcol")%in%colnames(ind)))
+		{
+		return(cat("ERROR: popfile should contain columns named 'name','pop' and 'popcol'.",sep="\n"))
+		}
+	# convert factor to character:
+	ind$pop2	<<- as.character(ind$pop)
+	ind$popcol2	<<- as.character(ind$popcol)
+	ind$pop		<<- NULL
+	ind$popcol	<<- NULL
+	ind$pop		<<- ind$pop2
+	ind$popcol	<<- ind$popcol2
+	#	
+	ind$nr	<<- c(1:nrow(ind))
+	ind		<<- ind[order(ind$name),]
+	cat("Sample information stored in dataframe 'ind'.",sep="\n")
+	temp	<- ind[,c("pop","popcol")]
+	temp2	<- aggregate(temp,by=list(temp$pop),FUN=unique)
+	temp3	<- aggregate(temp,by=list(temp$pop),FUN=length)
+	popdf	<<- data.frame("pop"=as.character(temp2$pop),"popcol"=as.character(temp2$popcol),"nind"=temp3$popcol)
+	cat("Population information stored in dataframe 'popdf'.",sep="\n")
+	}
+
+getbcfstats<-function(silent=TRUE,refdepth=8)
+	{
+	ninds				<- nrow(ind)
+	filenames 			<- list.files(pattern = "^bcfstats.he.depth")
+	if(length(filenames)<1)
+		{
+		cat("ERROR: no files ending on bcfstats.he.depth found in the directory:",sep="\n")
+		return(cat(getwd(),sep="\n"))
+		}
+	filenames			<- filenames[order(filenames,decreasing=F)]
+	#
+	depthhelist 		<- lapply(filenames,function(x)read.table(x,header=TRUE)) 
+	names(depthhelist)	<- filenames
+	#
+	tempname			<- sub("bcfstats.he.depth","",filenames)
+	mydepth				<- sub(".txt","",tempname)
+	#
+	for(k in c(1:length(filenames)))
+		{
+		depthhelist[[k]]$depth					<- as.numeric(as.character(mydepth[k]))
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat("Merging...",sep="\n")}
+		tempdf									<- merge(depthhelist[[k]],ind,by="name",all=TRUE) 
+		tempdf$depth[is.na(tempdf$nrefhomo)]	<- k
+		depthhelist[[k]]						<- tempdf[order(as.character(tempdf$name)),]
+		}
+	#
+	if(!silent){cat("Combining...",sep="\n")}
+	depthhelist			<<- depthhelist
+	hedf				<<- do.call(rbind,depthhelist)
+	if(!silent){cat("Calculating statistics...",sep="\n")}
+	hedf$miss			<<- hedf$nmiss/(hedf$nrefhomo+hedf$nalthomo+hedf$nhet+hedf$nmiss)
+	hedf$refhe			<<- hedf$he[hedf$depth==refdepth]
+	hedf$prophe			<<- hedf$he/hedf$refhe
+	#
+	z6					<- aggregate(ind$pop,by=list(ind$pop),FUN=length)
+	colnames(z6)		<- c("pop","nind")
+	hedf				<<- merge(hedf,z6,by="pop")
+	hedf				<<- hedf[order(hedf$depth,as.character(hedf$name)),]
+	#
+	hemat				<<- matrix(c(rep(0,ninds),hedf$he),nrow=ninds,ncol=32)
+	rownames(hemat)		<<- as.character(ind$name)
+	colnames(hemat)		<<- paste("depth",c(0:31),sep="")
+	cat("Heterozygosity scores stored in dataframes 'hedf' and 'hemat'.",sep="\n")
+	}
+
+getsnpgap<-function(silent=TRUE,refdepth=2,gapsizes=c(seq(1,15),30,50,100,200))
+	{
+	#indtemp				<- ind[,c(1:4)]
+	indtemp				<- ind[,c("name","nr","pop","popcol")]
+	ninds				<- nrow(indtemp)
+	filenames 			<<- list.files(pattern = "^bcfstats.he.snpgap")
+	filenames			<<- filenames[order(filenames,decreasing=F)]
+	ndatasets			<- length(filenames)
+	#
+	gaphelist 			<- lapply(filenames,function(x)read.table(x,header=TRUE)) 
+	names(gaphelist)	<- filenames
+	#
+	tempname			<- sub("bcfstats.he.snpgap","",filenames)
+	mygaps				<- sub(".txt","",tempname)
+	#
+	for(k in c(1:ndatasets))
+		{
+		gaphelist[[k]]$gap						<- as.numeric(as.character(mygaps[k]))
+		if(!silent){cat(k,sep="\n")}
+		if(!silent){cat("Merging...",sep="\n")}
+		tempdf									<- merge(gaphelist[[k]],indtemp,by="name",all=TRUE) 
+		gaphelist[[k]]							<- tempdf[order(as.character(tempdf$name)),]
+		}
+	#
+	if(!silent){cat("Combining...",sep="\n")}
+	gaphelist			<<- gaphelist
+	gaphedf				<<- do.call(rbind,gaphelist)
+	if(!silent){cat("Calculating statistics...",sep="\n")}
+	gaphedf$miss		<<- gaphedf$nmiss/(gaphedf$nrefhomo+gaphedf$nalthomo+gaphedf$nhet+gaphedf$nmiss)
+	#
+	z6					<- aggregate(indtemp$pop,by=list(indtemp$pop),FUN=length)
+	colnames(z6)		<- c("pop","nind")
+	gaphedf				<<- merge(gaphedf,z6,by="pop")
+	gaphedf				<<- gaphedf[order(gaphedf$gap,as.character(gaphedf$name)),]
+	#
+	if(!silent){cat("Creating matrix...",sep="\n")}
+	gaphemat			<<- matrix(gaphedf$he,nrow=ninds,ncol=ndatasets)
+	rownames(gaphemat)	<<- as.character(ind$name)
+	colnames(gaphemat)	<<- paste("gap",gapsizes,sep="")
+	cat("Heterozygosity scores stored in dataframes 'gaphedf' and 'gaphemat'.",sep="\n")
+	}
+
+plotgap<-function(myind="ABC10")
+	{
+	gaphetemp	<- gaphedf[!is.na(gaphedf$gap),]
+	myfilter	<- gaphetemp$name==myind&gaphetemp$miss<0.65
+	plot(gaphetemp$gap[myfilter],100*gaphetemp$he[myfilter],pch=16,col=as.vector(as.character(gaphetemp$popcol[myfilter])),xlim=c(0,200),type='b')
+	}
+
+getvcftoolsdepth<-function(silent=TRUE,myfile="sampledepth.idepth")
+	{
+	if(!file.exists(myfile))
+		{
+		return(cat(paste("ERROR: No file '",myfile,"'. Not importing depth data.",sep=""),sep="\n"))
+		}
+	x		<- read.table(myfile,header=TRUE)
+	x$name	<- as.character(x$INDV)
+	x$depth	<- x$MEAN_DEPTH
+	depthdf	<- x[,c("name","depth")]
+	ind		<<- merge(ind,depthdf,by="name")	
+	cat("Depth data added to ind dataframe.",sep="\n")
+	#
+	popdf$depthmean			<<- NA
+	popdf$depthsd				<<- NA
+	for(j in c(1:nrow(popdf)))
+		{
+		mypop				<- as.character(popdf$pop[j])
+		if(!silent){cat(mypop,sep="\n")}
+		popdf$depthmean[j]	<<- mean(ind$depth[as.character(ind$pop)== mypop],na.rm=TRUE) 
+		popdf$depthsd[j]		<<- sd(ind$depth[as.character(ind$pop)==mypop],na.rm=TRUE)
+		}
+	cat("Depth scores per population stored in dataframe called 'popdf'.",sep="\n")
+	}
+
+getlocusdepth<-function(silent=TRUE)
+	{
+	cat("Importing sample info...",sep="\n")
+	myinds				<<- read.table("myinfo.samples.txt",header=FALSE)
+	myinds				<<- as.character(myinds$V1)
+	ninds				<- length(myinds)
+	#
+	cat("Importing depth info...",sep="\n")
+	thindepthdf			<<- read.table("sampleinfo.DP.txt",header=FALSE)
+	colnames(thindepthdf)<<- c("all",myinds)
+	#
+	cat("Creating depth matrix...",sep="\n")
+	depthmat			<<- matrix(NA,nrow=ninds,ncol=32)
+	rownames(depthmat)	<<- myinds
+	colnames(depthmat)	<<- paste("depth",c(0:31),sep="")
+	for(k in c(1:ninds))
+		{
+		if(!silent){cat(k,sep="\n")}
+		indscores		<<- thindepthdf[,k+1]
+		indscores		<<- indscores[!is.na(indscores)]
+		for(j in c(1:32))
+			{
+			if(j<=30)
+				{
+				depthmat[k,j]	<<- length(indscores[indscores==j-1]) 
+				}else{
+				depthmat[k,j]	<<- length(indscores[indscores>=j-1])
+				}
+			}
+		}
+	depthmat			<<- depthmat[order(as.character(rownames(depthmat))),]
+	#
+	if(exists("hemat"))
+		{
+		cat("Object 'hemat' exists. Adding heterozygosity information to ind object.",sep="\n")
+		ind$he				<<- NA
+		ind$he_perc			<<- NA
+		ind$depth2			<<- NA
+		ind$depth3			<<- NA
+		ind$below3			<<- NA
+		ind$below4			<<- NA
+		ind$below5			<<- NA
+		for (i in c(1:nrow(ind)))
+			{
+			ind$he[i]		<<- sum(hemat[i,2:32]*depthmat[i,2:32],na.rm=TRUE)/sum(depthmat[i,2:32],na.rm=TRUE)
+			ind$he_perc[i]	<<- 100*ind$he[i]
+			ind$depth2[i]	<<- sum(depthmat[i,1:32]*c(1:32),na.rm=TRUE)/sum(depthmat[i,1:32],na.rm=TRUE)		# with depth=0
+			ind$depth3[i]	<<- sum(depthmat[i,2:32]*c(2:32),na.rm=TRUE)/sum(depthmat[i,2:32],na.rm=TRUE)		# without depth=0
+			ind$below3[i]	<<- sum(depthmat[i,1:3],na.rm=TRUE)/sum(depthmat[i,1:32],na.rm=TRUE)
+			ind$below4[i]	<<- sum(depthmat[i,1:4],na.rm=TRUE)/sum(depthmat[i,1:32],na.rm=TRUE)
+			ind$below5[i]	<<- sum(depthmat[i,1:5],na.rm=TRUE)/sum(depthmat[i,1:32],na.rm=TRUE)
+			}
+		hedf$nsites			<<- as.vector(depthmat[,2:ncol(depthmat)])
+		hedf$totalsites		<<- as.vector(rowSums(depthmat))
+		hedf$propsites		<<- hedf$nsites/hedf$totalsites
+		#
+		### effect of adding sites with higher depths on overall heterozygosity scores:
+		hemat2				<<- matrix(NA,nrow=ninds,ncol=32)
+		rownames(hemat2)	<<- rownames(hemat)
+		colnames(hemat2)	<<- colnames(hemat)
+		hemat2[,1]			<<- 0
+		for (i in c(1:nrow(ind)))
+			{
+			for(j in c(2:32))
+				{
+				hemat2[i,j]	<<- sum(hemat[i,2:j]*depthmat[i,2:j],na.rm=TRUE)/sum(depthmat[i,2:j],na.rm=TRUE)
+				}
+			}
+		#
+		### effect of adding sites with lower depths on overall heterozygosity scores:
+		hemat3				<<- matrix(NA,nrow=ninds,ncol=32)
+		rownames(hemat3)	<<- rownames(hemat)
+		colnames(hemat3)	<<- colnames(hemat)
+		for (i in c(1:nrow(ind)))
+			{
+			for(j in c(1:32))
+				{
+				hemat3[i,j]	<<- sum(hemat[i,j:32]*depthmat[i,j:32],na.rm=TRUE)/sum(depthmat[i,j:32],na.rm=TRUE)
+				}
+			}
+		}
+	}
+
+plotoveralldepth<-function(export=NULL,dolog=TRUE,mindepth=NULL,maxdepth=NULL,expmean=10)
+	{
+	mydp		<- thindepthdf$all
+	dphist	<<- hist(mydp,breaks=10000)
+	meandepth	<- round(mean(mydp,na.rm=TRUE),1)
+	cat(paste("Mean depth: ",meandepth,sep=""),sep="\n")
+	#
+	ninds		<- nrow(ind)
+	mindepth	<- ifelse(is.null(mindepth),6*ninds,mindepth)
+	maxdepth	<- ifelse(is.null(maxdepth),2*meandepth,maxdepth)
+	cat(paste("Number of individuals: ",ninds,sep=""),sep="\n")
+	cat(paste("Min depth: ",mindepth,sep=""),sep="\n")
+	cat(paste("2*mean depth: ",2*meandepth,sep=""),sep="\n")
+	cat(paste("Max depth: ",maxdepth,sep=""),sep="\n")
+	#
+	ndiscarded	<- round(length(which(mydp<mindepth|mydp>maxdepth))/length(mydp),3)
+	nretained	<- round(length(which(mydp>=mindepth&mydp<=maxdepth))/length(mydp),3)
+	#
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(dolog,"Depth.all.logscale.txt","Depth.all.linear.txt")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=10,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=10,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=10,height=10)}
+		}
+	par(mar=c(5,6,5,2),cex.axis=2.5,cex.lab=3,cex.main=3)
+	if(!dolog)
+		{
+		plot(dphist$mids,dphist$counts,type='l',xlab="Depth",ylab="Number of sites")
+		}else{
+		plot(dphist$mids,dphist$counts,log="xy",xlab="Depth",ylab="Number of sites",pch=16,cex=0.5)
+		}
+	abline(v=ninds*expmean,lty=2,col="grey50")
+	abline(v=mindepth,col="red")
+	abline(v=meandepth,lty=2,col="red")
+	abline(v=maxdepth,col="red")
+	#
+	mtext(side=3,line=2.5,paste("Retained: ",nretained*100," %",sep=""),cex=2.25)
+	mtext(side=3,line=0.5,paste("Discarded: ",ndiscarded*100," %",sep=""),cex=2.25)
+	if(!is.null(export)){dev.off()}
+	}
+
+plotpos_vs_depth<-function(export=NULL,dolog=FALSE,addpos=NULL,thin=100,plottitle=NULL,mylog="y",ymax=NULL,mindepth=NULL,maxdepth=NULL)
+	{
+	if(!file.exists("sampleinfo.pos.txt"))
+		{
+		return(cat("ERROR: no file called 'sampleinfo.pos.txt'. This file is generated by BAM2VCF script, starting with versions of March 2022.",sep="\n"))
+		}
+	mypos	<-	read.table("sampleinfo.pos.txt")
+	#
+	# thin:
+	mypos	<- mypos$V1[seq(1,length(thindepthdf$all),thin)]
+	mydepth	<- thindepthdf$all[seq(1,length(thindepthdf$all),thin)]
+	#
+	# plot:
+	if(!is.null(export))
+		{
+		plotname	<- "Depth_along_chromosome"
+		plotname	<- ifelse(mylog!="",paste(plotname,"log",sep="."),paste(plotname,"linear",sep="."))
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=14,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=14,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=1400,height=1000)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=14,height=10)}
+		}
+	par(mar=c(5,6,5,2),cex.axis=2.5,cex.lab=3,cex.main=3)
+	ymax	<- ifelse(is.null(ymax),max(mydepth,na.rm=TRUE),ymax)
+	plot(mypos/1000000,mydepth,pch=16,cex=0.5,xlab="Position (Mb)",ylab="Overall depth",log=mylog,ylim=c(1,ymax))
+	if(!is.null(addpos)){abline(v=addpos/1000000,col="red")}
+	if(!is.null(plottitle)){mtext(side=3,plottitle,line=0.5,cex=3)}
+	if(!is.null(mindepth)){abline(h=mindepth,col="red")}
+	if(!is.null(maxdepth)){abline(h=maxdepth,col="red")}
+	if(!is.null(export)){dev.off()}
+	}
+
+plothe_vs_depth<-function(export=NULL,poslegend="topleft",dolabels=FALSE,printname=ind$name,minind=10)
+	{
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(dolabels,"He_vs_depth_labels","He_vs_depth")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=10,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=10,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=10,height=10)}
+		}
+	par(mar=c(5,6,5,2),cex.axis=2.5,cex.lab=3,cex.main=3)
+	if(dolabels)
+		{
+		plot(ind$depth,100*ind$he,pch=16,col="white",cex=3,xlab="Mean sample depth",ylab="Mean sample He (%)")
+		text(ind$depth,100*ind$he,printname,col=as.character(ind$popcol))
+		}else{
+		plot(ind$depth,100*ind$he,pch=16,col=as.character(ind$popcol),cex=3,xlab="Mean sample depth",ylab="Mean sample He (%)")
+		}
+	#
+	for(i in c(1:nrow(popdf)))
+		{
+		mypop	<- as.character(popdf$pop[i])
+		indtemp	<- ind[as.character(ind$pop)==mypop,]
+		mycol	<- as.character(indtemp$popcol[1])
+		if(nrow(indtemp)>=minind)
+			{
+			mylm	<- lm(100*indtemp$he~indtemp$depth)
+			abline(mylm,lwd=1.5,col=mycol) 
+			}
+		}
+	#
+	coldf	<- ind[,c("pop","popcol")]
+	aggcoldf<- aggregate(coldf,by=list(coldf$pop),FUN=unique)
+	legend(poslegend,legend=as.character(aggcoldf$pop),fill=as.character(aggcoldf$popcol),cex=1.25,bty='n')
+	if(!is.null(export)){dev.off()}
+	}
+
+# This function shows there is no need to filter per sample on high read depth
+# We can do so using the overall depth filter setting: for brown bear dataset less than 2x overall mean depth.
+all_vs_sampledp<-function(export=NULL,dolog=FALSE,maxdepth=NULL,sample_size=100000)
+	{
+	ninds		<- nrow(ind)
+	mybool		<- sample(c(1:nrow(thindepthdf)),sample_size,replace=FALSE)
+	alldepth	<- thindepthdf[mybool,1]
+	sampledepths<- thindepthdf[mybool,c(2:(ninds+1))]
+	sampledepth	<- vector()
+	for(i in c(1:sample_size))
+		{
+		indnr			<- sample(c(1:ninds),1)
+		sampledepth[i]	<- sampledepths[i,indnr]
+		}
+	#
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(dolog,"Depths.all_vs_sample.logscale.txt","Depths.all_vs_sample.linear.txt")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=10,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=10,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=720,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=10,height=10)}
+		}
+	par(mar=c(5,6,5,2),cex.axis=2.5,cex.lab=3,cex.main=3)
+	if(dolog)
+		{
+		plot(alldepth,sampledepth,xlab="Overall locus depth",ylab="Sample depth",log="xy",cex=0.5,pch=16)
+		}else{
+		plot(alldepth,sampledepth,xlab="Overall locus depth",ylab="Sample depth",cex=0.5,pch=16)
+		}
+	if(!is.null(maxdepth))
+		{
+		abline(v=maxdepth,lty=2,col="red")
+		}
+	if(!is.null(export)){dev.off()}
+	}
+
+getlocusquality<-function(silent=TRUE)
+	{
+	cat("Importing sample info...",sep="\n")
+	myinds				<<- read.table("myinfo.samples.txt",header=FALSE)
+	myinds				<<- as.character(myinds$V1)
+	ninds				<- length(myinds)
+	#
+	cat("Importing genotype quality info...",sep="\n")
+	thinqdf				<<- read.table("sampleinfo.GQ.txt",header=FALSE)
+	colnames(thinqdf)	<<- c("all",myinds)
+	}
+
+
+qualityvsdepth<-function(indplot=FALSE)
+	{
+	ninds	<- nrow(ind)
+	#
+	nmiss	<<- apply(thinqdf,1,FUN=function(x){length(x[x=="."])})
+	ddf		<<- thindepthdf[nmiss==0,c(2:(ninds+1))]
+	qdf		<<- thinqdf[nmiss==0,c(2:(ninds+1))]
+	ddf		<<- ddf[,order(as.character(colnames(ddf)))]
+	qdf		<<- qdf[,order(as.character(colnames(qdf)))]
+	#
+	if(any(!as.character(ind$name)==as.character(colnames(ddf))))
+		{
+		cat("WARNING: names do not correspond.",sep="\n")
+		}
+	if(any(!as.character(ind$name)==as.character(colnames(qdf))))
+		{
+		cat("WARNING: names do not correspond.",sep="\n")
+		}
+	#
+	ind$r	<<- NA
+	if(indplot){par(mfrow=c(3,3))}
+	for(j in c(1:ninds))
+		{
+		myq		<- as.numeric(qdf[,j])
+		myqmax	<- max(myq,na.rm=TRUE)
+		#
+		myd		<- as.numeric(ddf[,j])
+		mydmean	<- mean(myd,na.rm=TRUE)
+		mydsd	<- sd(myd,na.rm=TRUE)
+		myd95	<- mydmean+2*mydsd
+		#
+		mybool	<- myq!=myqmax&myd<=myd95
+		#mybool	<- myd<=myd95
+		mylm	<- lm(myq[mybool]~myd[mybool])
+		ind$bool[j]	<<- length(mybool[mybool])	
+		ind$r[j]	<<- round(summary(mylm)$r.squared,5)
+		#ind$p[j]	<<- as.vector(summary(mylm)$coefficients[,4][2])
+		if(indplot&j<=9)
+			{
+			plot(myd[mybool],myq[mybool],xlab="Individual genotype depth",ylab="Individual genotype quality",pch=16,cex=0.5)
+			abline(mylm,col="red") 
+			mtext(side=3,text=ind$name[j],line=1)
+			}
+		}
+	#plot(ind$r,pch=16,col=as.character(ind$popcol))
+	}
+
+sampleboxplot<-function(export=NULL,indscore="he",plotname="He",ylabel="Heterozygosity (%)",myymax=NULL)
+	{
+	indtemp				<- ind[,c("pop",indscore)]
+	colnames(indtemp)	<- c("pop","indscore")
+	#
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- paste(plotname,"sampleboxplot",sep=".")
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=16,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=16,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=1000,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=16,height=10)}
+		}
+	par(mar=c(14,8,5,2),cex.axis=2,cex.lab=3,cex.main=3)
+	boxplot(indtemp$indscore~indtemp$pop,col="grey90",border="grey50",xlab="",ylab="",las=2)
+	stripchart(indscore~pop,data=indtemp,vertical=TRUE,method="jitter",pch=16,cex=2.5,bg="bisque",col=as.character(popdf$popcol),las=2,xlab="",ylab="",add=TRUE)
+	mtext(side=2,ylabel,line=5,cex=3)
+	if(!is.null(export)){dev.off()}
+	}
+
+multiplotmat<-function(export=NULL,plotname="depthclass_he_cumulative",ylabel="Cumulative heterozygosity (%)",xlabel="Sequencing depth",plotlabel="bcftools call --group-samples, no masking",inputmat=100*hemat2,xmax=NULL,ymax=NULL,mindepth=3,use_lty=TRUE,xrange=NULL,popyrange=FALSE)
+	{
+	npop	<- nrow(popdf)
+	nclass	<- ncol(inputmat)
+	if(is.null(xrange))
+		{
+		xrange	<- c(1:nclass)
+		}
+	#
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- ifelse(is.null(xmax),plotname,paste(plotname,xmax,sep="."))
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=18,height=22)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=18,height=22)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=1800,height=2200)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=18,height=22)}
+		}
+	layout(matrix(c(1:24),6,4,byrow = TRUE))
+	par(mar=c(1.5,1.5,1,0.5),oma=c(5,6.5,4,1),cex.axis=2.25,cex.lab=2.5,cex.main=2.5)
+	ymax	<- ifelse(is.null(ymax),max(inputmat,na.rm=TRUE),ymax)
+	xmax	<- ifelse(is.null(xmax),max(xrange),xmax)
+	#
+	for (j in c(1:npop))
+		{
+		mypop	<- as.character(popdf$pop[j])
+		nind	<- popdf$nind[j]
+		mybool	<- as.character(ind$pop)==mypop
+		indtemp	<- ind[mybool,,drop=FALSE]
+		popmat	<- inputmat[mybool,,drop=FALSE]
+		if(any(!as.character(indtemp$name)==as.character(rownames(popmat))))
+			{
+			cat("WARNING: names do not correspond.",sep="\n")
+			}
+		myyaxt		<- ifelse((j+3)%%4==0,'s','n')
+		ymax		<- ifelse(popyrange,max(popmat,na.rm=TRUE),ymax)
+		ymin		<- ifelse(popyrange,min(popmat,na.rm=TRUE),0)
+		plot(xrange,popmat[1,],type='l',col="white",xlab="",yaxt=myyaxt,ylab="",ylim=c(ymin,ymax),xlim=c(0,xmax))
+		for(i in c(1:nrow(indtemp)))
+			{
+			if(use_lty)
+				{
+				mydepth	<- indtemp$depth2[i]
+				mylty	<- ifelse(mydepth<7,2,ifelse(mydepth>12,3,1))
+				}else{
+				mylty	<- 1
+				}
+			lines(xrange,popmat[i,],type='l',col=as.character(indtemp$popcol[i]),lwd=3,lty=mylty)
+			}
+		abline(v=mindepth,lty=2,col="grey50")
+		mtext(side=3,mypop,cex=2,line=-2.5)
+		mtext(side=3,nind,cex=2,line=-5)
+		if(j==1&use_lty)
+			{
+			legend("topright",lty=c(3,1,2),legend=c(">12","7-12","<7"),bty='n',cex=2.5)
+			}
+		}
+	mtext(text=plotlabel,cex=3,side=3,line=0.5,outer=TRUE)
+	mtext(text=ylabel,cex=3,side=2,line=2.25,outer=TRUE)
+	mtext(text=xlabel,cex=3,side=1,line=2.75,outer=TRUE)
+	if(!is.null(export)){dev.off()}
+	}
+
+plotmat<-function(export=NULL,plotname="depthclass_he",mypop=NULL,ymax=NULL,inputmat=100*hemat2,ylabel="Heterozygosity (%)")
+	{
+	if(!is.null(mypop))
+		{
+		mybool	<- as.character(ind$pop)==mypop
+		indtemp	<- ind[mybool,,drop=FALSE]
+		inputmat<- inputmat[mybool,,drop=FALSE]
+		}else{
+		indtemp	<- ind
+		}
+	nclass		<- ncol(inputmat)
+	mymax		<- ifelse(is.null(ymax),max(inputmat,na.rm=TRUE),ymax)
+	#
+	graphics.off()
+	if(!is.null(export))
+		{
+		plotname	<- "depthclass_he"
+		if(export=="eps"){postscript(paste(plotname,"eps",sep="."),width=16,height=10)}
+		if(export=="pdf"){pdf(paste(plotname,"pdf",sep="."),width=16,height=10)}
+		if(export=="png"){png(paste(plotname,"png",sep="."),width=1000,height=720)}
+		if(export=="wmf"){win.metafile(paste(plotname,"wmf",sep="."),width=16,height=10)}
+		}
+	if(any(!as.character(indtemp$name)==as.character(rownames(inputmat))))
+		{
+		cat("WARNING: names do not correspond.",sep="\n")
+		}
+	plot(c(1:nckass),inputmat[1,],type='l',col="white",xlab="Depth",ylab=ylabel,ylim=c(0,ymax))
+	for(i in c(1:nrow(inputmat)))
+		{
+		lines(c(1:nclass),100*inputmat[i,],type='l',col=as.character(indtemp$popcol[i]),lwd=2)
+		}
+	if(!is.null(export)){dev.off()}
+	}
+
+
+
+
+
+
+
+
+
+
