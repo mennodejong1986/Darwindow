@@ -17,7 +17,7 @@
 # The windowsize (default is 20000bp) can be adjusted below with the flag 'winsize'.
 
 # Before running the actual calculations, the script goes through 3 preparatory steps:
-# 1. if 'do_index' is TRUE:				index vcf file with tabix     
+# 1. if 'do_index' is TRUE:				index vcf file with bcftools index   
 # 2. if 'extract_contiginfo' is TRUE:	create file called 'mylongcontigs.txt' which contains names and length of contig/scaffold names (longer than 5Mb, or other value specified by 'mincontigbp' flag)    
 # 3. if 'extract_samples' is TRUE:		create file called 'myvcfsamples.txt' which lists all samples in vcf file. If popscores is set to TRUE, it will also create a file called 'allpoppairs.txt' which lists all pairwise population comparisons (based on populations defined in second column of POPFILE; the file 'allpoppairs.txt' is tab separated: first column: pop1, second column: pop2).
  
@@ -27,10 +27,10 @@
 # Quick start guide for Heterozygosity and ROH-analyses:
 # 0. Make the Darwindow script an executable by typing: chmod +x VCF_darwindow.sh. Optionally, to remove potential unwanted hidden characters, type: dos2unix VCF_darwindow.sh 
 # 1. specify in the control panel the software paths (TABIX and BCFTOOLS) 
-# 2. specify in the control panel the name of the vcf file to the 'MYVCF' flag
+# 2. specify in the control panel the path to the input gvcf file 
 # 3. specify in the control panel the window size (in bp) to the 'winsize' flag.
-#	 Consider that He is around 0.002, so that even without missing data a window of 10Kb will on average contain around 20 heterozygous sites.
-#	 Low numbers of heterozygous sites are subject to stochasticity. Therefore, you don't want to go much below on expected value of 10-20 heterozygous sites (after correction for missing data).
+#	 Consider that heterozygosity for mammals typically ranges between 0.0002 and 0.004, so that even without missing data a window of 10Kb will on average contain around 2 to 40 heterozygous sites only.
+#	 Low numbers of heterozygous sites are subject to stochasticity. Therefore, you don't want to go much below an expected value of 10-20 heterozygous sites per window (after correction for missing data).
 # 4. specify in the control panel the minimum length of contig/scaffold to be considered in the analyses to the 'mincontigbp' flag
 # 5. set in the control panel the flags of the three preparatory steps to TRUE (leave all other flags set to FALSE) and execute the script on the Unix command line.
 # 6. once all preparatory steps finished succesfully, set in the control panel the flags of the three preparatory steps to FALSE, and set the flag 'run_loop' and 'sample_scores' to TRUE. Leave all other flags set to FALSE.
@@ -75,13 +75,13 @@
 ###### CONTROL PANEL ######
 
 # software:
-TABIX=/opt/software/htslib-1.17									# without forward slash at the end (note: NOT to tabix executable itself, but to bin directory which contains tabix and bgzip executable)
-BCFTOOLS=/opt/software/bcftools-1.17/bcftools					# Needed for filtering on INDELS only. Alternatively you can use zgrep command (see section 'remove_indels')
-VCFTOOLS=/opt/software/vcftools/vcftools_0.1.17/bin/vcftools	# Needed for LD calculations only
-ADMIXTEST=/home/mdejong/bearproject/snpfiles_december2020/slidingwindow121/testrun/VCF_3poptest_admixtools.sh	# Not needed, unless admixture f3 analysis. Note: first read instructions in VCF_3poptest_admixtools.sh script.  
+TABIX=/opt/software/htslib-1.18									# without forward slash at the end (note: NOT to tabix executable itself, but to bin directory which contains tabix and bgzip executable)
+BCFTOOLS=/path/to/bcftools-1.18/bcftools						# Needed for filtering on INDELS only. Alternatively you can use zgrep command (see section 'remove_indels')
+VCFTOOLS=/path/to/vcftools/vcftools_0.1.17/bin/vcftools			# Needed for LD calculations only
+ADMIXTEST=/path/to/software/VCF_3poptest_admixtools.sh			# Not needed, unless admixture f3 analysis. Note: first read instructions in VCF_3poptest_admixtools.sh script.  
 
 # input files:
-MYVCF=/home/mdejong/bearproject/snpfiles_NorthAmerica/Darwindow/NorthAmericamodern112.allsites.globalfilter.vcf.gz                 # Input file should be compressed using bcftools view -O z (so: NOTE with gzip, because this won't be accepted by tabix). 
+MYVCF=/path/to/inputfile/mydata.allsites.globalfilter.vcf.gz	# Input file should be compressed using bcftools view -O z (so: NOT with gzip, because this won't be accepted by tabix). 
 POPFILE=mymainpopfile.txt										# Only needed if flag 'pop_scores' is set to TRUE. Not needed for heterozygosity analyses 
 
 # settings:
@@ -126,7 +126,8 @@ if [[ "$do_index" = TRUE ]]
 	# $TABIX/tabix -f -p vcf ${MYVCF}
 	# Option 2:
 	echo "Indexing with bcftools --tbi (instead of default --csi)..."
-	$BCFTOOLS index --threads 15 --tbi ${MYVCF}
+	$BCFTOOLS index --threads 20 --tbi ${MYVCF}
+	# Note: seems to use max 250% only, even if specifying more cores.
 fi
 
 if [[ "$extract_contiginfo" = TRUE ]]
