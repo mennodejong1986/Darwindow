@@ -1077,7 +1077,7 @@ calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE,region_missfilter=TRUE
 			regionhedf[,k]		<- round(rollapply(winhe,width=nwindows,mean,by=nwindows,na.rm=TRUE),5)
 			if(region_missfilter)
 				{
-				# 04-10-2024: extra filter
+				# 04-10-2024: extra miss filter
 				# this avoids that in region heterozygosity is based on a single window
 				# for instance: if region contains 10 windows, and if 9 windows are filtered out owing to high missingness, without the region_missfilter the regional heterozygosity will be based on the single window
 				# with the region_missfilter, such regions will be set to NA, and hence will not be considered when searching for ROHs using the findroh function	
@@ -1086,10 +1086,16 @@ calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE,region_missfilter=TRUE
 			chromdxydf[j,k]		<- round(mean(windxy,na.rm=TRUE),4) 
 			chromhedf[j,k]		<- round(mean(winhe,na.rm=TRUE),4)  
 			chrommissdf[j,k]	<- round(mean(indmiss,na.rm=TRUE),4)  
-			chromnsitesdf[j,k]	<- round(sum(indnsites,na.rm=TRUE),4) 
+			chromnsitesdf[j,k]	<- round(sum(indnsites,na.rm=TRUE),4)
 			}
 		regionmisslist[[j]]		<- regionmissdf
 		regionhelist[[j]]		<- regionhedf 
+		}
+	chrompsitesdf				<- as.data.frame(matrix(NA,nrow=ncontigs,ncol=ninds))
+	for(k in c(1:ninds))
+		{
+		indname					<- ind$name[k]
+		chrompsitesdf[,k]		<- chromnsitesdf[,k]/sum(chromnsitesdf[,k])
 		}
 	dwd$regionmissdf			<<- as.data.frame(do.call(rbind,regionmisslist))
 	dwd$regionhedf				<<- as.data.frame(do.call(rbind,regionhelist))
@@ -1097,6 +1103,7 @@ calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE,region_missfilter=TRUE
 	dwd$chromdxydf				<<- chromdxydf
 	dwd$chrommissdf				<<- chrommissdf
 	dwd$chromnsitesdf			<<- chromnsitesdf
+	dwd$chrompsitesdf			<<- chrompsitesdf
 	#
 	regionhedf					<- dwd$regionhedf[,1:ninds,drop=FALSE]
 	if(ninds>1)
@@ -1217,7 +1224,8 @@ findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=10000
 		}
 	dwd$regionbooldf			<<- as.data.frame(do.call(rbind,regionboollist))
 	ind$hethreshold				<- hethresholdvec		
-	ind$froh					<- as.vector(round(apply(frohdf,2,mean,na.rm=TRUE),5))
+	#ind$froh					<- as.vector(round(apply(frohdf,2,mean,na.rm=TRUE),5))			# 16-10-2024: replaced with weighted mean
+	ind$froh					<- round(colSums(dwd$chrompsitesdf*frohdf,na.rm=TRUE),4)		# 16-10-2024: weighted mean
 	ind$froh_sd_scaffold		<- apply(frohdf,2,sd,na.rm=TRUE)
 	ind$nroh					<- as.vector(apply(nrohdf,2,sum,na.rm=TRUE))
 	genomesize					<- nrow(loc[loc$filter,])*loc$endbp[1]
