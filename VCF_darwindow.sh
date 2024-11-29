@@ -75,8 +75,8 @@
 ###### CONTROL PANEL ######
 
 # software:
-TABIX=/opt/software/htslib-1.18									# without forward slash at the end (note: NOT to tabix executable itself, but to bin directory which contains tabix and bgzip executable)
-BCFTOOLS=/path/to/bcftools-1.18/bcftools						# Needed for filtering on INDELS only. Alternatively you can use zgrep command (see section 'remove_indels')
+BCFTOOLS=/path/to/bcftools-1.18/bcftools						# Path to bcftools executable. Needed for filtering on INDELS only. Alternatively you can use zgrep command (see section 'remove_indels')
+TABIX=/opt/software/htslib-1.18									# NOT to tabix executable itself, but to bin directory which contains tabix and bgzip executable. Without forward slash at the end
 VCFTOOLS=/path/to/vcftools/vcftools_0.1.17/bin/vcftools			# Needed for LD calculations only
 ADMIXTEST=/path/to/software/VCF_3poptest_admixtools.sh			# Not needed, unless admixture f3 analysis. Note: first read instructions in VCF_3poptest_admixtools.sh script.  
 

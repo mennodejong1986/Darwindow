@@ -69,6 +69,11 @@ examplerun<-function()
 	mywd	<-getwd()
 	getwindowdata(suffix="20000.allsites_roh.txt",vcfsamples="myvcfsamples.txt",samplefile="myvcfsampleinfo.txt",annotated=FALSE,indlevel=TRUE,poplevel=FALSE,mydir=mywd)
 	#
+	# OPTIONALLY REORDER POPULATIONS:
+	# for instance, if your populations are called 'Asia', 'Europe', and 'NA':
+	mypoporder	<- c("Europe","Asia","NA")
+	reorder_pop(mypoporder)
+	#
 	# CALCULATE HETEROZYGOSITY:
 	window_size	<- 20000		# window size in bp
 	nr_windows	<- 10			# minimum number of adjacent windows to be considered as a ROH (for example: if n_windows is set 4, and window size is 25000, then reported ROHs are minimum 100Kb)
@@ -1859,7 +1864,8 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozygosity (%)",yline=5.5,silent=TRUE,mywidth=0.75)
 	{
 	ind			<- dwd$ind
-	ind			<- ind[order(ind$pop),]
+	#ind		<- ind[order(ind$pop),]			# 20-11-2024
+	ind			<- ind[order(ind$poporder),]	# 20-11-2024
 	popcolours	<- as.character(ind$popcol)
 	ninds		<- nrow(ind)
 	#
@@ -1940,9 +1946,9 @@ indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_reg
 	{
 	loc	<- dwd$loc
 	#
-	ind	<- dwd$ind
+	ind			<- dwd$ind
 	mypoporder	<- order(ind$pop)
-	ind	<- ind[mypoporder,]
+	ind			<- ind[mypoporder,]
 	popcolours	<- as.character(ind$popcol)
 	ninds		<- nrow(ind)
 	#	

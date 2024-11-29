@@ -24,6 +24,14 @@
 # 5. Set the flags 'run_loop' and 'sample_scores' to TRUE. All other boolean flags/variables should be set to FALSE (although depending on the analysis you want to run).
 # 6. Afterwards, simply run: ./VCF_darwindow_runparallel.sh &
 
+# Once all runs finished, you can combine the output.
+# For instance, say that your scaffold names start with 'HiC_scaffold', then to combine use this command:
+# cat HiC_scaffold*/mywindowhe.20000.allsites_roh.txt | grep -v 'contig' > mywindowhe.20000.allsites_roh.txt 
+ 
+# You can add the header with Excel.
+# The header should be as follows:
+# 'contig startbp endbp totalbp nmiss_1 nsites_1 nhet_1 nhomo_1 nmiss_2 nsites_2 nhet_2 nhomo_2 nmiss_3 nsites_3 nhet_3 nhomo_3' etc
+
 
 
 ########################################################
