@@ -67,7 +67,7 @@ Maximum amount of missing data per window:
 
 *reorder_pop(poporder=mypoporder)*
 
-**Optionally remove certain individuals:**
+**Optionally exclude certain individuals from subsequent analyses:**
 
 *dwd$ind$filter[dwd$ind$name%in%c("name1","name2")]		<- FALSE*
 
