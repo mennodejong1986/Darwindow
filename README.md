@@ -67,6 +67,10 @@ Maximum amount of missing data per window:
 
 *reorder_pop(poporder=mypoporder)*
 
+**Optionally remove certain individuals:**
+
+*dwd$ind$filter[dwd$ind$name%in%c("name1","name2")]		<- FALSE*
+
 **Calculate genome-wide heterozygosity:**
 
 *calcwindowhe(maxmiss=miss_max)*
