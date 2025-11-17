@@ -1863,7 +1863,8 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 
 indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozygosity (%)",yline=5.5,silent=TRUE,mywidth=0.75)
 	{
-	ind			<- dwd$ind
+	#ind		<- dwd$ind
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,])	# 05-02-2025
 	#ind		<- ind[order(ind$pop),]			# 20-11-2024
 	ind			<- ind[order(ind$poporder),]	# 20-11-2024
 	popcolours	<- as.character(ind$popcol)
