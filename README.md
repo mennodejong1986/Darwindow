@@ -24,6 +24,7 @@ The columns 'nmiss_1', 'nsites_1', 'nhet_1' and 'nhomo_1' give for each window t
 
 Users who generated the input vcf files used the BAM2VCF script (and hence have one vcf-file per scaffold), can use the scripts 'VCF_darwindow.region.sh' and 'VCF_darwindow_region_parallel.sh' for straightforward parallelisation.
 Other users may have a look at the 'VCF_darwindow_parallel.sh', but use at your own risk (and first carefully read instructions in this file and in 'VCF_darwindow.sh'!). 
+Afterwards combine the output of the files 'mywindowhe.20000.allsites_roh.txt' in all subdirectories to a single combined file (but make sure to remove the headers except at the first line).
 
 ## How to next run 'VCF_windowhe_plotinR.txt' 
 
