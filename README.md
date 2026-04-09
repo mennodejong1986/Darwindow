@@ -22,8 +22,8 @@ The columns 'nmiss_1', 'nsites_1', 'nhet_1' and 'nhomo_1' give for each window t
 
 ## How to run 'VCF_darwindow.sh' parallel (for multiple scaffolds simultaneously)
 
-Users who generated the input vcf files used the BAM2VCF script (and hence have one vcf-file per scaffold), can use the scripts VCF_darwindow.region.sh and VCF_darwindow_region_parallel.sh for straightforward parallelisation.
-Other users may have a look at the VCF_darwindow_parallel.sh' at their own risk (but first carefully read instructions within the file). 
+Users who generated the input vcf files used the BAM2VCF script (and hence have one vcf-file per scaffold), can use the scripts 'VCF_darwindow.region.sh' and 'VCF_darwindow_region_parallel.sh' for straightforward parallelisation.
+Other users may have a look at the 'VCF_darwindow_parallel.sh', but use at your own risk (and first carefully read instructions in this file and in 'VCF_darwindow.sh'!). 
 
 ## How to next run 'VCF_windowhe_plotinR.txt' 
 
