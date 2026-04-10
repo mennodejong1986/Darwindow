@@ -118,6 +118,8 @@ Once you defined the threshold, run the following functions to detect ROHs:
 
 *getrohbin()*
 
+Note: if rerunning the findroh function with a different input to the nwindows flag, make sure to first rerun the calcregionhe function, otherwise the ROH locations will be incorrect. 
+
 **Plot runs of homozygosity:**
 
 *runindscaffold(height_unit=1,do_export=TRUE,input_df1=dwd$hedf,input_df2=dwd$frohdf,plot_label="He_withROH",add_roh=TRUE,add_he=TRUE,add_dxy=FALSE,max_miss=miss_max,n_windows=nr_windows,min_rle_len=1,window_size=window_size,line_width=0.1,plot_width=14)*
