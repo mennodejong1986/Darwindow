@@ -342,7 +342,7 @@ if [[ "$run_loop" = TRUE ]]
 				winsize2=$winsize
 			fi
 			# CALCULATE WINDOW STATS:
-			$TABIX/tabix ${MYVCF} ${contigname}:${startbp}-${endbp} -h | ${BCFTOOLS} view --exclude-types indels -H > myvcfregion.${winsize}.allcolumns.noindels.txt
+			$TABIX/tabix ${MYVCF} ${contigname}:${startbp}-${endbp} -h | ${BCFTOOLS}/bcftools view --exclude-types indels -H > myvcfregion.${winsize}.allcolumns.noindels.txt
 			cut -f10- myvcfregion.${winsize}.allcolumns.noindels.txt > myvcfregion.${winsize}.noindels.txt
 			cut -f1-9 myvcfregion.${winsize}.allcolumns.noindels.txt > myvcfregion.${winsize}.metainfo.noindels.txt
 			totalbp=$(wc -l myvcfregion.${winsize}.metainfo.noindels.txt | cut -f1 -d ' ')
