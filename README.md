@@ -75,12 +75,9 @@ The file 'myvcfsamples.txt', which lists the order of individuals in the vcf-fil
 
 *reorder_pop(poporder=mypoporder)*
 
-**Optionally exclude certain populations from subsequent analyses:**
+**Optionally exclude certain populations or individuals from subsequent analyses:**
 
 *exclude_pop(do_exclude=c("pop1","pop2"))*
-
-**Optionally exclude certain individuals from subsequent analyses:**
-
 *exclude_ind(do_exclude=c("ind1","ind2"))*
 
 **Calculate genome-wide heterozygosity:**
