@@ -801,8 +801,29 @@ getwindowdata<-function(suffix="100000.allsites_multi.txt",snpdata=FALSE,vcfsamp
 	cat("Data has been stored in list object named 'dwd'.",sep="\n")
 	}
 
+exclude_ind<-function(do_exclude=NULL)
+	{
+	if(!exists("dwd"))
+		{
+		return(cat("ERROR: object 'dwd' does not exist. Did you correctly load the data using the getwindowdata()?",sep="\n"))
+		}
+	if(is.null(do_exclude))
+		{
+		return(cat("ERROR: specify one or more individuals to the do_exclude flag.",sep="\n"))
+		}
+	if(any(!(do_exclude%in%dwd$ind$name)))
+		{
+		return(cat("ERROR: one or more specified individuals are not present in the data.",sep="\n"))
+		}
+	dwd$ind$filter[dwd$ind$name%in%do_exclude] <- FALSE
+	}
+
 exclude_pop<-function(do_exclude=NULL)
 	{
+	if(!exists("dwd"))
+		{
+		return(cat("ERROR: object 'dwd' does not exist. Did you correctly load the data using the getwindowdata()?",sep="\n"))
+		}
 	cat("Resetting filters...",sep="\n")
 	dwd$popinfo$filter	<<- TRUE
 	dwd$ind$filter		<<- TRUE
@@ -1125,7 +1146,9 @@ calcregionhe<-function(maxmiss=0.6,nwindows=5,silent=TRUE,region_missfilter=TRUE
 	}
 
 # find stretches of regions with low He
-findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=100000,nwindows=5)
+# 10-04-2026: alternatively, if findadmix is set to true, find regions within high He
+# 10-04-2026: in the case of roe deer, this allows to detected introgressed Siberian DNA (He > 0.3%) in European genomes (He <0.15%) 
+findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=100000,nwindows=5,findadmix=FALSE)
 	{
 	# nwindow: 			number of windows which make up a region (see calcregionhe function)
 	# min_rle_length: 	minimum number of adjacent regions with low heterozygosity to be considered a run of homozygosity
@@ -1191,7 +1214,13 @@ findroh<-function(silent=TRUE,hethreshold=0.05,min_rle_length=1,windowsize=10000
 			#
 			# region he below threshold?
 			indregionhe			<- regionhedf[regionhedf$contig==scaffoldname,indname]
-			indregionbool		<- indregionhe<hethresholdvec[k]
+			if(findadmix)
+				{
+				# 10-04-2026:
+				indregionbool	<- indregionhe>hethresholdvec[k]
+				}else{
+				indregionbool	<- indregionhe<hethresholdvec[k]
+				}
 			regionbooldf[,k]	<- indregionbool 					
 			#
 			# find runs of homozygosity: 
@@ -1297,8 +1326,10 @@ correcthe<-function()
 	#
 	mymin		<- min(c(ind$regionhe2[ind$filter],ind$regionhe[ind$filter]),na.rm=TRUE)
 	mymax		<- max(c(ind$regionhe2[ind$filter],ind$regionhe[ind$filter]),na.rm=TRUE)
+	pdf("Uncorrected_vs_Corrected_He.pdf")
 	plot(ind$regionhe2[ind$filter],ind$regionhe[ind$filter],col=as.character(ind$popcol),pch=16,ylim=c(mymin,mymax),xlim=c(mymin,mymax),xlab="He without ROH",ylab="He with ROH",cex=2.5)
-	lines(x=c(0,1),y=c(0,1))
+	lines(x=c(-1,1),y=c(-1,1))
+	dev.off()
 	}
 
 # roh lengths distribution
@@ -1440,7 +1471,7 @@ getrohbin<-function(silent=TRUE)
 	cat("ROH-bin data has been stored at dwd$nrohbindf, dwd$lrohbindf and dwd$frohbindf.",sep="\n")
 	}
 
-rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotname="ROHn_barplot",export=NULL,mybg="white",axiscol="black",yline=5,mywidth=0.75,legendcex=1.5,legendpos="topleft",addlegend=TRUE,legx=NULL,legy=NULL,mycex=1,ypopcol=NULL)
+rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotname="ROHn_barplot",export=NULL,mybg="white",axiscol="black",yline=5,mywidth=0.75,legendcex=1.5,legendpos="topleft",addlegend=TRUE,legx=NULL,legy=NULL,mycex=1,ypopcol=NULL,ymax=NULL)
 	{
 	if(is.null(mycolours))
 		{
@@ -1452,11 +1483,14 @@ rohbarplot<-function(inputdf=dwd$nrohbindf,ylabel="# ROHs",mycolours=NULL,plotna
 	#
 	mydf	<- inputdf[dwd$ind$filter,,drop=FALSE]
 	mymat	<- t(as.matrix(mydf))
-	if(!is.null(ypopcol))
+	if(is.null(ymax))
 		{
-		ymax	<- max(colSums(mymat),na.rm=TRUE)*1.05		
-		}else{
-		ymax	<- max(colSums(mymat),na.rm=TRUE)
+		if(!is.null(ypopcol))
+			{
+			ymax	<- max(colSums(mymat),na.rm=TRUE)*1.05		
+			}else{
+			ymax	<- max(colSums(mymat),na.rm=TRUE)
+			}
 		}
 	#
 	# reorder:
@@ -1767,17 +1801,17 @@ indlisthisto<-function(export=NULL,inputlist=dwd$lrohlist2,mybreaks=seq(-0.05,5,
 		}
 	}
 
-runindhisto<-function(exporttype=NULL,missrange=seq(0.3,0.9,0.1),my_breaks=seq(-0.01,5,0.005),plot_name="He_histo_window",input_df=dwd$regionhedf,miss_df=NULL,window_size=100000,n_windows=5,x_max=0.6,y_max=15,silent=TRUE,legend_cex=2.5)
+runindhisto<-function(exporttype=NULL,missrange=seq(0.3,0.9,0.1),my_breaks=seq(-0.01,5,0.005),plot_name="He_histo_window",input_df=dwd$regionhedf,miss_df=NULL,window_size=100000,n_windows=5,x_max=0.6,y_max=15,silent=TRUE,legend_cex=2.5,my_lwd=4)
 	{
 	cat("Creating heterozygosity histograms using various thresholds for missing data...",sep="\n")
 	for(missvalue in missrange)
 		{
 		cat(paste("Missing data threshold: ",missvalue,".",sep=""),sep="\n")
-		indhisto(export=exporttype,plotname=plot_name,mybreaks=my_breaks,inputdf=input_df,missdf=miss_df,maxmiss=missvalue,silent=TRUE,windowsize=window_size,nwindows=n_windows,xmax=x_max,ymax=y_max,legendcex=legend_cex)
+		indhisto(export=exporttype,plotname=plot_name,mybreaks=my_breaks,inputdf=input_df,missdf=miss_df,maxmiss=missvalue,silent=TRUE,windowsize=window_size,nwindows=n_windows,xmax=x_max,ymax=y_max,legendcex=legend_cex,mylwd=my_lwd)
 		}
 	}
 
-indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,legendpos="topright",legendcex=2.5,plotname="He_histo_region",inputdf=dwd$regionhedf,missdf=NULL,maxmiss=0.9,silent=TRUE,windowsize=100000,nwindows=5)
+indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,legendpos="topright",legendcex=2.5,plotname="He_histo_region",inputdf=dwd$regionhedf,missdf=NULL,maxmiss=0.9,silent=TRUE,windowsize=100000,nwindows=5,mylwd=4)
 	{
 	popinfo		<- droplevels(dwd$popinfo[dwd$popinfo$filter,,drop=FALSE])
 	ind			<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])
@@ -1834,7 +1868,7 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 		if(!silent){cat(ind$name[k],sep="\n")}
 		if(!silent){cat(length(myfilter[myfilter]),sep="\n")}
 		mydensity<- density(inputmat[myfilter,k],na.rm=TRUE)
-		lines(mydensity$x,mydensity$y,col=popcolours[k],lwd=5)
+		lines(mydensity$x,mydensity$y,col=popcolours[k],lwd=mylwd)
 		}
 	if(!is.null(missdf))
 		{
@@ -1861,7 +1895,46 @@ indhisto<-function(export=NULL,mybreaks=seq(-0.01,5,0.005),xmax=0.6,ymax=15,lege
 	cat(paste("WARNING: maximum of y-axis is set to ",ymax,". You can adjust this threshold using the ymax flag.",sep=""),sep="\n")
 	}
 
-indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozygosity (%)",yline=5.5,silent=TRUE,mywidth=0.75)
+indlogbarplot<-function(export=NULL,plotname="Froh",yline=5.5,silent=TRUE,mywidth=0.25,cex_axis=1,mycolumn="froh",ylabel="F-roh",dolog=FALSE,logthres=0.001)
+	{
+	#ind		<- dwd$ind
+	ind			<- droplevels(dwd$ind[dwd$ind$filter,])	# 05-02-2025
+	#ind		<- ind[order(ind$pop),]			# 20-11-2024
+	ind			<- ind[order(ind$poporder),]	# 20-11-2024
+	popcolours	<- as.character(ind$popcol)
+	ninds		<- nrow(ind)
+	plotvec		<- ind[,(colnames(ind)==mycolumn)]
+	if(dolog)
+		{
+		plotvec[plotvec<=logthres]	<- NA
+		}
+	if(!is.null(export))
+		{
+		mywidth2	<- mywidth*100
+		if(export=="eps"){postscript(paste(plotname,"ind.barplot.eps",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="pdf"){pdf(paste(plotname,"ind.barplot.pdf",sep="."),width=ninds*mywidth,height=8)}
+		if(export=="png"){png(paste(plotname,"ind.barplot.png",sep="."),width=ninds*mywidth2,height=900)}
+		if(export=="wmf"){win.metafile(paste(plotname,"ind.barplot.wmf",sep="."),width=ninds*mywidth,height=8)}
+		}
+	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=cex_axis)
+	if(dolog)
+		{
+		barplot(plotvec,col=popcolours,border=NA,names.arg=ind$name,las=2,yaxt='n',log="y")
+		}else{
+		barplot(plotvec,col=popcolours,border=NA,names.arg=ind$name,las=2,yaxt='n')
+		}
+	axis(side=2,cex.axis=2.5,las=1)
+	mtext(side=2,ylabel,line=yline,cex=2.75,outer=TRUE,las=0)
+	if(!is.null(export))
+		{
+		dev.off()
+		cat("Barplot has been exported to the directory:",sep="\n")
+		cat(getwd(),sep="\n")
+		}
+	cat("TIP: you might want to use the mywidth flag to adjust the width of the graph. The default (which works for 100ish samples), is 0.75. But if you have only a few samples, use a higher value for mywidth.",sep="\n")
+	}
+
+indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozygosity (%)",yline=5.5,silent=TRUE,mywidth=0.75,cex_axis=1)
 	{
 	#ind		<- dwd$ind
 	ind			<- droplevels(dwd$ind[dwd$ind$filter,])	# 05-02-2025
@@ -1892,7 +1965,7 @@ indbarplot<-function(export=NULL,plotname="Genomewide_regionHe",ylabel="Heterozy
 		if(export=="png"){png(paste(plotname,"ind.barplot.png",sep="."),width=ninds*mywidth2,height=900)}
 		if(export=="wmf"){win.metafile(paste(plotname,"ind.barplot.wmf",sep="."),width=ninds*mywidth,height=8)}
 		}
-	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
+	par(oma=c(13,8,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=cex_axis)
 	barcenters	<- barplot(ind$filterhe,col=popcolours,border=NA,names.arg=ind$name,las=2,yaxt='n',ylim=c(0,ymax))
 	axis(side=2,cex.axis=2.5,las=1)
 	if(addbars)
@@ -1943,7 +2016,7 @@ indlistboxplot<-function(export=NULL,inputlist=dwd$rohlengths,plotname="ROHlengt
 		}
 	}
 
-indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.6,mywidth=0.75)
+indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_regionHe",ymax=0.7,ylabel="Heterozygosity (%)",yline=3.25,samplesize=500,maxmiss=0.6,mywidth=0.75,cex_axis=1)
 	{
 	loc	<- dwd$loc
 	#
@@ -1975,8 +2048,8 @@ indboxplot<-function(export=NULL,inputdf=dwd$regionhedf,plotname="Genomewide_reg
 		if(export=="png"){png(paste(plotname,plotlabel,"ind.png",sep="."),width=ninds*mywidth2,height=900)}
 		if(export=="wmf"){win.metafile(paste(plotname,plotlabel,"ind.wmf",sep="."),width=ninds*mywidth,height=8)}
 		}
-	par(oma=c(9,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=2)
-	boxplot(inputmat,border=popcolours,col="grey90",cex.axis=1.5,pch=16,outline=FALSE,ylim=c(0,ymax),las=2,xlab="",ylab="")
+	par(oma=c(9,5,1,1),mar=c(5,0.5,0.5,0.5),cex.axis=cex_axis)
+	boxplot(inputmat,border=popcolours,col="grey90",cex.axis=1,pch=16,outline=FALSE,ylim=c(0,ymax),las=2,xlab="",ylab="")
 	stripchart(inputlist,vertical=TRUE,method="jitter",pch=16,cex=0.5,col=popcolours,bg="bisque",add=TRUE) 
 	mtext(side=2,ylabel,line=yline,cex=1.75,outer=TRUE,las=0)
 	#mtext(side=1,"Sample",line=6.5,cex=1.75)
@@ -2633,7 +2706,7 @@ heperroh<-function(export=NULL,plotname="RohHe_vs_RohLength",samplevec=NULL,dope
 	}
 
 # depends on plotscaffold
-runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,plot_width=14,my_factor=1,height_unit=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE,xlabel_cex=1.5)
+runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_df2=NULL,plot_width=14,my_factor=1,height_unit=1,height_factor1=0.25,height_factor2=5,plot_label="He",add_roh=TRUE,add_he=FALSE,add_dxy=FALSE,add_miss=FALSE,add_zero=TRUE,n_windows=5,min_rle_len=4,add_line=FALSE,be_silent=TRUE,do_lines=TRUE,window_size=100000,max_miss=0.6,line_width=0.1,scatter_cex=0.5,add_yaxis=FALSE,add_side4=TRUE,xlabel_cex=1.5,y_label="F-roh",roh_col="grey70",do_reverse=FALSE,use_popcol=TRUE)
 	{
 	ind				<- droplevels(dwd$ind[dwd$ind$filter,,drop=FALSE])	
 	loc				<- dwd$loc
@@ -2653,7 +2726,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 			{
 			myscaf	<- myscaffolds[scafnr]
 			if(!be_silent){cat(myscaf,sep="\n")}
-			indscaffold(inputdf1=input_df1,inputdf2=input_df2,plotwidth=plot_width,heightunit=height_unit,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,addside4=add_side4,xlabelcex=xlabel_cex)
+			indscaffold(inputdf1=input_df1,inputdf2=input_df2,plotwidth=plot_width,heightunit=height_unit,heightfactor1=height_factor1,heightfactor2=height_factor2,myfactor=my_factor,plotlabel=plot_label,addroh=add_roh,addhe=add_he,adddxy=add_dxy,addmiss=add_miss,addzero=add_zero,nwindows=n_windows,min_rle_length=min_rle_len,scaffoldname=myscaf,popvector=pop_vector,usepopcol=use_popcol,export=do_export,silent=be_silent,dolines=do_lines,win_size=window_size,maxmiss=max_miss,linewidth=line_width,scattercex=scatter_cex,addyaxis=add_yaxis,ylabel=y_label,addside4=add_side4,xlabelcex=xlabel_cex,rohcol=roh_col,doreverse=do_reverse)
 			if(add_roh)
 				{
 				# store ROH position information
@@ -2682,7 +2755,7 @@ runindscaffold<-function(poplist=NULL,do_export=FALSE,input_df1=dwd$hedf,input_d
 		}
 	}
 
-indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,addside4=TRUE,xlabelcex=1.5)
+indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,myfactor=1,do_reorder=TRUE,plotlabel="He",addroh=TRUE,addhe=FALSE,adddxy=FALSE,addmiss=FALSE,addzero=TRUE,nwindows=5,min_rle_length=4,scaffoldname="HiC_scaffold_1",popvector=NULL,usepopcol=TRUE,export=FALSE,silent=TRUE,dolines=TRUE,win_size=100000,maxmiss=0.6,linewidth=0.1,scattercex=0.5,addpopname=FALSE,heightfactor1=0.25,heightfactor2=5,addyaxis=FALSE,ylabel="F-roh",addside4=TRUE,xlabelcex=1.5,rohcol="grey70",doreverse=FALSE)
 	{
 	loc				<- dwd$loc
 	if(!scaffoldname%in%as.character(loc$contig))
@@ -2762,13 +2835,26 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,
 		#plot(windowmid,scoredf[,1],col="white",ylim=c(0,ninds),pch=16,yaxt='n',ylab="",xlab="")
 		plot(windowmid,scoredf[,1],col="white",ylim=c(0,heightunit*ninds),pch=16,yaxt='n',ylab="",xlab="")
 		}
+	if(doreverse)
+		{
+		indvec					<- rev(indnames)
+		frohvec					<- rev(frohvec)
+		dxyvec					<- rev(dxyvec)
+		}else{
+		indvec					<- indnames
+		}
 	for(k in c(1:ninds))
 		{
-		indname					<- indnames[k]
+		indname					<- indvec[k]
 		if(!silent){cat(k,sep="\n")}
 		if(!silent){cat(indname,sep="\n")}
 		popname					<- ind$pop[ind$name==indname]
-		popcol					<- ind$popcol[ind$name==indname]
+		if(usepopcol)
+			{
+			popcol				<- ind$popcol[ind$name==indname]
+			}else{
+			popcol				<- "grey20"
+			}
 		indmiss					<- missdf[,indname]
 		winfilter				<- indmiss<=maxmiss
 		#
@@ -2782,8 +2868,9 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,
 		#
 		if(addroh)
 			{
-			rleout			<- contigrlelist[[k]]
-			RLEindices		<- which(rleout$values==TRUE&rleout$lengths>=min_rle_length)
+			#rleout			<- contigrlelist[[k]]
+			rleout			<- contigrlelist[[which(names(contigrlelist)==indname)]]
+			RLEindices		<- which(rleout$values==TRUE&!is.na(rleout$values)&rleout$lengths>=min_rle_length)
 			nroh			<- length(RLEindices)
 			if(nroh>0)
 				{
@@ -2794,7 +2881,7 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,
 				for(i in c(1:nroh))
 					{
 					#rect(xleft=rohstart[i],ybottom=k-1,xright=rohend[i],ytop=k-0.2,col="grey95",border=NA)
-					rect(xleft=rohstart[i],ybottom=heightunit*k-heightunit*1,xright=rohend[i],ytop=heightunit*k-heightunit*0.2,col="grey95",border=NA)
+					rect(xleft=rohstart[i],ybottom=heightunit*k-heightunit*1,xright=rohend[i],ytop=heightunit*k-heightunit*0.2,col=rohcol,border=NA)
 					}
 				# add info to dataframe:
 				indrohdf	<- data.frame("sample"=indname,"pop"=popname,"popcol"=popcol,"chr"=scaffoldname,"start"=rohstart,"end"=rohend)	
@@ -2821,16 +2908,18 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,
 			#	lines(windowmid,indscores2+(heightunit*k-heightunit*1),col="grey70",lwd=linewidth)
 			#	}
 			#lines(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),lwd=linewidth)
-			lines(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),lwd=linewidth)
+			#lines(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),lwd=linewidth)
+			lines(windowmid,indscores+(heightunit*k-heightunit*1),col=popcol,lwd=linewidth)
 			}else{
 			#points(windowmid,indscores+(k-1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
-			points(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
+			#points(windowmid,indscores+(heightunit*k-heightunit*1),col=as.character(ind2$popcol[k]),pch=16,cex=scattercex)
+			points(windowmid,indscores+(heightunit*k-heightunit*1),col=popcol,pch=16,cex=scattercex)
 			}
 		}
 	if(addside4)
 		{
 		#axis(side=4,at=seq(0.25,ninds-0.75,1),label=indnames,cex=1,las=1)
-		axis(side=4,at=seq(0.25*heightunit,heightunit*ninds-(heightunit-0.25*heightunit),heightunit*1),label=indnames,cex=1,las=1)
+		axis(side=4,at=seq(0.25*heightunit,heightunit*ninds-(heightunit-0.25*heightunit),heightunit*1),label=indvec,cex=1,las=1)
 		}
 	mtext(paste("Window size = ",win_size/1000,"K",sep=""),side=3,line=0,cex=1.5)
 	mtext(paste("scaffold ",scaffoldname,sep=""),side=3,line=2,cex=1.75)
@@ -2840,7 +2929,7 @@ indscaffold<-function(inputdf1=dwd$hedf,inputdf2=NULL,plotwidth=14,heightunit=1,
 			{
 			#axis(side=2,at=seq(0.25,ninds-0.75,1),label=frohvec,cex=0.5,las=1)
 			axis(side=2,at=seq(0.25*heightunit,heightunit*ninds-(heightunit-0.25*heightunit),heightunit*1),label=frohvec,cex=0.5,las=1)
-			mtext("F_roh",side=2,line=4,cex=2)
+			mtext(ylabel,side=2,line=4,cex=2)
 			}else{
 			if(addhe)
 				{
