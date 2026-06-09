@@ -815,7 +815,8 @@ exclude_ind<-function(do_exclude=NULL)
 		{
 		return(cat("ERROR: one or more specified individuals are not present in the data.",sep="\n"))
 		}
-	dwd$ind$filter[dwd$ind$name%in%do_exclude] <- FALSE
+	dwd$ind$filter[dwd$ind$name%in%do_exclude] <<- FALSE
+	cat("Specified individuals will be excluded from subsequent analyses.",sep="\n")
 	}
 
 exclude_pop<-function(do_exclude=NULL)
